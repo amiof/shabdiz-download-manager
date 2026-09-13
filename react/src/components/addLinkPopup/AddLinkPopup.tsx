@@ -321,7 +321,7 @@ const AddLinkPopup = () => {
           ) : (
             <div className={"flex gap-2 "}>
               <Button
-                variant={"outlined"}
+                variant={"contained"}
                 color={"success"}
                 size={"small"}
                 endIcon={<DownloadOutlinedIcon />}
@@ -341,7 +341,7 @@ const AddLinkPopup = () => {
               </Button>
             </div>
           )}
-          <Button variant={"outlined"} color={"error"} size={"small"} onClick={() => closePopupWindow(id)}>
+          <Button variant={"contained"} color={"error"} size={"small"} onClick={() => closePopupWindow(id)}>
             Cancel
           </Button>
         </div>
