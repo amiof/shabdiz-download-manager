@@ -15,14 +15,27 @@ import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { resMetadataUrls } from "@src/types.ts"
 import { getIdFromLocation } from "@src/utils.ts"
 import clsx from "clsx"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useLocation } from "react-router-dom"
 import styles from "./sytle.module.scss"
 
+type TSwitchToTorrentLink = {
+  isMagnet: boolean,
+  isTorrent: boolean,
+  linkAddress: string,
+}
 const AddLinkPopup = () => {
   const closePopupWindow = window.electronAPI.closePopupWindow
   const addDownloadDir = window.electronAPI.addDownloadDir
   const addDownloadPopup = window.electronAPI.addDownloadPopup
+
+  const [switchToTorrentLink, setSwitchToTorrentLink] = useState<TSwitchToTorrentLink>({
+    isMagnet: false,
+    isTorrent: false,
+    linkAddress: ""
+  })
+
+  const [clipboardLink, setClipboardLink] = useState("")
 
   const location = useLocation()
   const id = getIdFromLocation(location, ":")
@@ -33,6 +46,36 @@ const AddLinkPopup = () => {
   const proxyConfigs = useAddLinkStore((state) => state.proxyConfig)
   const options = useAddLinkStore((state) => state.options)
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
+
+  // Detect clipboard content once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const clipboardContent = await window.electronAPI.readClipboard()
+        if (clipboardContent.trim().startsWith("magnet:")) {
+          setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
+          return
+        }
+        const cleanUrl = new URL(clipboardContent)
+        cleanUrl.search = ""
+        if (cleanUrl.toString().endsWith(".torrent")) {
+          setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
+          return
+        }
+        // Normal link - pass to AddLinkTab
+        setClipboardLink(clipboardContent)
+      } catch {
+        // Clipboard content is not a valid URL, ignore
+      }
+    })()
+  }, [])
+
+  // Switch to Torrent tab once when clipboard is detected as magnet/torrent
+  useEffect(() => {
+    if (switchToTorrentLink.isTorrent || switchToTorrentLink.isMagnet) {
+      setValue("Torrent")
+    }
+  }, [switchToTorrentLink])
 
   const downloadHandler = async () => {
     if (linkAddressStore) {
@@ -176,7 +219,7 @@ const AddLinkPopup = () => {
   const changeComponents = () => {
     switch (value) {
       case "Link":
-        return <AddLinkTab />
+        return <AddLinkTab initialLink={clipboardLink} />
       case "Proxy":
         return <AddLinkProxy />
       case "Options":
@@ -184,6 +227,8 @@ const AddLinkPopup = () => {
       case "Torrent":
         return (
           <AddTorrentTab
+            setSwitchToTorrentLink={setSwitchToTorrentLink}
+            switchToTorrentLink={switchToTorrentLink}
             inputType={torrentInputType}
             inputValue={torrentInputValue}
             metadata={torrentMetadata}
@@ -199,7 +244,7 @@ const AddLinkPopup = () => {
           />
         )
       default:
-        return <AddLinkTab />
+        return <AddLinkTab initialLink={clipboardLink} />
     }
   }
 

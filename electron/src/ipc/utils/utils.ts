@@ -481,7 +481,7 @@ export const ipcUtilsHandler = () => {
   )
 
   ipcMain.handle(UTILS_CHANNELS.READ_CLIPBOARD, () => {
-    const text = clipboard.readText()
+    const text = clipboard.readText().trim()
 
     if (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("magnet:")) {
       return text

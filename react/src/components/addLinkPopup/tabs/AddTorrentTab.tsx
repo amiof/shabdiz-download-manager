@@ -24,15 +24,16 @@ import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView"
 import { TreeItem } from "@mui/x-tree-view/TreeItem"
 import { TTorrentFileInfo } from "@src/types.ts"
 import { formatBytes } from "@src/utils.ts"
+import { useEffect } from "react"
 
 const createTorrentTree = (torrentFiles: TTorrentFileInfo[] | undefined) => {
   const root: TTorrentTreeNode = { id: "root", name: "root", children: [], fileIndexes: [] }
-  
+
   torrentFiles?.forEach((file, index) => {
     const pathParts = file.path.split("\\").join("/").split("/").filter(Boolean)
     const parts = pathParts.length ? pathParts : [file.name || `File ${index + 1}`]
     let currentNode = root
-    
+
     parts.forEach((part, partIndex) => {
       const isFile = partIndex === parts.length - 1
       if (isFile) {
@@ -47,7 +48,7 @@ const createTorrentTree = (torrentFiles: TTorrentFileInfo[] | undefined) => {
         currentNode.fileIndexes.push(index)
         return
       }
-      
+
       let folder = currentNode.children.find((child) => child.fileIndex === undefined && child.name === part)
       if (!folder) {
         folder = {
@@ -62,7 +63,7 @@ const createTorrentTree = (torrentFiles: TTorrentFileInfo[] | undefined) => {
       currentNode = folder
     })
   })
-  
+
   return root.children
 }
 
@@ -71,27 +72,30 @@ const formatMetadataSize = (size: string) => {
   return Number.isFinite(bytes) ? formatBytes(bytes) : size
 }
 
-const AddTorrentTab = ({
-                         inputType,
-                         inputValue,
-                         metadata,
-                         selectedTorrentIndexes,
-                         step,
-                         loading,
-                         error,
-                         onInputTypeChange,
-                         onInputValueChange,
-                         onSelectTorrentFile,
-                         onSubmit,
-                         onSelectedTorrentIndexesChange
-                       }: TAddTorrentTabProps) => {
+const AddTorrentTab = (props: TAddTorrentTabProps) => {
+  const {
+    inputType,
+    inputValue,
+    metadata,
+    selectedTorrentIndexes,
+    step,
+    loading,
+    error,
+    switchToTorrentLink,
+    setSwitchToTorrentLink,
+    onInputTypeChange,
+    onInputValueChange,
+    onSelectTorrentFile,
+    onSubmit,
+    onSelectedTorrentIndexesChange,
+  } = props
+
   const torrentTree = createTorrentTree(metadata?.torrentFiles)
   const selectedIndexes = new Set(selectedTorrentIndexes)
-  
+
   const handleInputTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     onInputTypeChange(event.target.value as TTorrentInputType)
   }
-  
   const handleNodeSelection = (node: TTorrentTreeNode, checked: boolean) => {
     const nextIndexes = new Set(selectedTorrentIndexes)
     node.fileIndexes.forEach((index) => {
@@ -100,13 +104,22 @@ const AddTorrentTab = ({
     })
     onSelectedTorrentIndexesChange([...nextIndexes].sort((first, second) => first - second))
   }
-  
+
+  useEffect(() => {
+    if (switchToTorrentLink.isMagnet || switchToTorrentLink.isTorrent) {
+      onInputTypeChange(switchToTorrentLink.isMagnet ? "Magnet URL" : "Torrent Link")
+      onInputValueChange(switchToTorrentLink.linkAddress)
+      setSwitchToTorrentLink({isTorrent:false,isMagnet:false,linkAddress:""})
+    }
+  }, [switchToTorrentLink])
+
   const renderTreeNode = (node: TTorrentTreeNode) => {
     const selectedChildren = node.fileIndexes.filter((index) => selectedIndexes.has(index)).length
     const checked = node.fileIndexes.length > 0 && selectedChildren === node.fileIndexes.length
     const indeterminate = selectedChildren > 0 && selectedChildren < node.fileIndexes.length
     const isFile = node.fileIndex !== undefined
-    
+
+
     return (
       <TreeItem
         key={node.id}
@@ -140,7 +153,7 @@ const AddTorrentTab = ({
       </TreeItem>
     )
   }
-  
+
   if (step === "files") {
     return (
       <div className="w-full h-full px-8 py-5 flex flex-col overflow-hidden">
@@ -168,7 +181,7 @@ const AddTorrentTab = ({
       </div>
     )
   }
-  
+
   const metadataRows = metadata
     ? [
       ["File name", metadata.fileName],
@@ -180,7 +193,7 @@ const AddTorrentTab = ({
       ["Torrent files", metadata.torrentFiles?.length ? String(metadata.torrentFiles.length) : null]
     ].filter((row): row is [string, string] => Boolean(row[1]))
     : []
-  
+
   return (
     <div className="w-full h-full px-10 py-5 flex flex-col gap-4 overflow-auto">
       <FormControl>
@@ -191,7 +204,7 @@ const AddTorrentTab = ({
           <FormControlLabel value="Torrent File" control={<Radio size="small" />} label="Torrent File" />
         </RadioGroup>
       </FormControl>
-      
+
       <div className="flex items-center gap-2">
         <TextField
           color="success"
@@ -226,9 +239,9 @@ const AddTorrentTab = ({
           </Tooltip>
         )}
       </div>
-      
+
       {error && <Alert severity="error">{error}</Alert>}
-      
+
       {metadata && (
         <Paper variant="outlined" className="px-4 py-2" sx={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
           <Typography variant="subtitle2" sx={{ mb: 1.5 }}>

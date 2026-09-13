@@ -7,7 +7,12 @@ import { resMetadataUrls } from "@src/types.ts"
 import { formatBytes, getFileName } from "@src/utils.ts"
 import { useCallback, useEffect, useState } from "react"
 
-const AddLinkTab = () => {
+type Props = {
+  initialLink?: string
+}
+const AddLinkTab = (props: Props) => {
+  const { initialLink } = props
+
   const linkAddressStore = useAddLinkStore((state) => state.linkAddressStore)
   const savePathStore = useAddLinkStore((state) => state.savePathStore)
   const fileNameStore = useAddLinkStore((state) => state.fileNameStore)
@@ -16,7 +21,7 @@ const AddLinkTab = () => {
   const setSavePathStore = useAddLinkStore((state) => state.setSavePathStore)
 
 
-  const [linkAddress, setLinkAddress] = useState<string>(linkAddressStore)
+  const [linkAddress, setLinkAddress] = useState<string>(initialLink || linkAddressStore)
   const [selectedDownloadPath, setSelectedDownloadPath] = useState<string>(savePathStore)
   const [fileName, setFileName] = useState<string>(fileNameStore)
   const [metadataUrl, setMetadataUrl] = useState<resMetadataUrls>({
@@ -26,15 +31,13 @@ const AddLinkTab = () => {
     savePath: "",
     resume: null
   })
-
-  // add default save Path
   useEffect(() => {
-    // read link from clipboard
-    ;(async () => {
-      const clipboardLink = await window.electronAPI.readClipboard()
-      setLinkAddress(clipboardLink)
-    })()
+    if(initialLink){
+      setLinkAddress(initialLink)
+    }
+  }, [initialLink])
 
+  useEffect(() => {
     if (savePathStore) {
       setMetadataUrl({ ...metadataUrl, savePath: savePathStore })
     }
@@ -52,14 +55,17 @@ const AddLinkTab = () => {
         const resMetadata = await window.electronAPI.getMetadataUrls(linkAddress)
         if (selectedDownloadPath) {
           setMetadataUrl({ ...resMetadata, savePath: selectedDownloadPath })
-        } else {
+        }
+        else {
           setMetadataUrl(resMetadata)
         }
       })()
-    } else {
+    }
+    else {
       if (selectedDownloadPath) {
         setMetadataUrl({ size: "0", typeUrl: "direct", fileName: "", savePath: selectedDownloadPath, resume: null })
-      } else {
+      }
+      else {
         setMetadataUrl({ size: "0", typeUrl: "direct", fileName: "", savePath: "", resume: null })
       }
     }
@@ -73,10 +79,12 @@ const AddLinkTab = () => {
     if (linkAddress) {
       if (metadataUrl.fileName) {
         return metadataUrl.fileName
-      } else {
+      }
+      else {
         return getFileName(linkAddress)
       }
-    } else {
+    }
+    else {
       return ""
     }
   }, [fileName, metadataUrl.fileName, linkAddress])

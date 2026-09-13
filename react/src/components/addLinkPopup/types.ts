@@ -19,6 +19,16 @@ export type TAddTorrentTabProps = {
   onSelectTorrentFile: () => void
   onSubmit: () => void
   onSelectedTorrentIndexesChange: (indexes: number[]) => void
+  setSwitchToTorrentLink: React.Dispatch<React.SetStateAction<{
+    isMagnet: boolean,
+    isTorrent: boolean,
+    linkAddress: string
+  }>>
+  switchToTorrentLink: {
+    isMagnet: boolean,
+    isTorrent: boolean,
+    linkAddress: string
+  }
 }
 
 export type TTorrentTreeNode = {
