@@ -1,4 +1,3 @@
-
 name: Build aria2 macOS Universal
 
 on:
@@ -33,8 +32,8 @@ jobs:
 
           cd "$DEPS"
 
-          curl -fL --retry 5 --retry-all-errors \
-            "https://ftpmirror.gnu.org/gmp/gmp-6.3.0.tar.xz" \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
+            "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz" \
             -o gmp-6.3.0.tar.xz
 
           tar -xf gmp-6.3.0.tar.xz
@@ -59,8 +58,8 @@ jobs:
 
           cd "$DEPS"
 
-          curl -fL --retry 5 --retry-all-errors \
-            "https://github.com/c-ares/c-ares/releases/download/cares-1_34_5/c-ares-1.34.5.tar.gz" \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
+            "https://github.com/c-ares/c-ares/releases/download/v1.34.5/c-ares-1.34.5.tar.gz" \
             -o c-ares-1.34.5.tar.gz
 
           tar -xf c-ares-1.34.5.tar.gz
@@ -84,7 +83,7 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/build"
 
-          curl -fL --retry 5 --retry-all-errors \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
             "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz" \
             -o aria2.tar.xz
 
@@ -165,8 +164,8 @@ jobs:
 
           cd "$DEPS"
 
-          curl -fL --retry 5 --retry-all-errors \
-            "https://ftpmirror.gnu.org/gmp/gmp-6.3.0.tar.xz" \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
+            "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz" \
             -o gmp-6.3.0.tar.xz
 
           tar -xf gmp-6.3.0.tar.xz
@@ -191,8 +190,8 @@ jobs:
 
           cd "$DEPS"
 
-          curl -fL --retry 5 --retry-all-errors \
-            "https://github.com/c-ares/c-ares/releases/download/cares-1_34_5/c-ares-1.34.5.tar.gz" \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
+            "https://github.com/c-ares/c-ares/releases/download/v1.34.5/c-ares-1.34.5.tar.gz" \
             -o c-ares-1.34.5.tar.gz
 
           tar -xf c-ares-1.34.5.tar.gz
@@ -216,7 +215,7 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/build"
 
-          curl -fL --retry 5 --retry-all-errors \
+          curl -fL --retry 5 --retry-all-errors --retry-connrefused \
             "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz" \
             -o aria2.tar.xz
 
