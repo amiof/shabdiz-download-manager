@@ -1,46 +1,243 @@
-name: Build MacOS and Release aria2
+name: Build macOS Universal aria2
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-latest
+  # ============================================================
+  # Build aria2 for Intel x86_64
+  # ============================================================
+  build-x64:
+    name: Build aria2 x86_64
+    runs-on: macos-15-intel
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies (macOS)
+      - name: Show architecture
         run: |
-          brew install autoconf automake libtool gettext \
-            openssl cppunit libxml2 zlib sqlite3
+          uname -m
+          arch
+
+      - name: Install dependencies
+        run: |
+          brew install \
+            autoconf \
+            automake \
+            libtool \
+            gettext \
+            openssl \
+            cppunit \
+            libxml2 \
+            zlib \
+            sqlite3
+
           brew link --force --overwrite libtool
           brew link --force --overwrite gettext
-          echo 'export PATH="/usr/local/opt/libtool/libexec/gnubin:$PATH"' >> ~/.bash_profile
-          echo 'export PATH="/usr/local/opt/libtool/libexec/gnubin:$PATH"' >> ~/.zshrc
-          echo 'export PATH="/usr/local/opt/gettext/bin:$PATH"' >> ~/.bash_profile
-          echo 'export PATH="/usr/local/opt/gettext/bin:$PATH"' >> ~/.zshrc
-          source ~/.bash_profile || true
-          source ~/.zshrc || true
 
       - name: Clone aria2
-        run: git clone https://github.com/aria2/aria2.git --depth=1
-
-      - name: Build aria2 (macOS)
         run: |
+          git clone https://github.com/aria2/aria2.git --depth=1
+
+      - name: Build aria2
+        shell: bash
+        run: |
+          set -e
+
           cd aria2
+
           glibtoolize --force
           autoreconf -fiv
-          ./configure --disable-nls --enable-static --disable-shared
-          # حذف پوشه po و ایجاد پوشه po خالی با یک Makefile ساده جهت جلوگیری از خطا
-          rm -rf po
-          mkdir po
-          echo -e 'all:\n\t@echo "Skipping po build."' > po/Makefile
-          make -j$(sysctl -n hw.logicalcpu)
 
-      - name: Upload artifacts
+          ./configure \
+            --disable-nls \
+            --enable-static \
+            --disable-shared
+
+          # Skip gettext/po build
+          rm -rf po
+          mkdir -p po
+
+          printf 'all:\n\t@echo "Skipping po build."\n' > po/Makefile
+
+          make -j"$(sysctl -n hw.logicalcpu)"
+
+      - name: Verify aria2 x86_64
+        run: |
+          file aria2/src/aria2c
+          lipo -info aria2/src/aria2c
+
+          mkdir -p artifact
+          cp aria2/src/aria2c artifact/aria2c-x86_64
+          chmod +x artifact/aria2c-x86_64
+
+      - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aria2-macos
-          path: aria2/src/aria2c*
+          name: aria2-macos-x64
+          path: artifact/aria2c-x86_64
+
+
+  # ============================================================
+  # Build aria2 for Apple Silicon ARM64
+  # ============================================================
+  build-arm64:
+    name: Build aria2 arm64
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show architecture
+        run: |
+          uname -m
+          arch
+
+      - name: Install dependencies
+        run: |
+          brew install \
+            autoconf \
+            automake \
+            libtool \
+            gettext \
+            openssl \
+            cppunit \
+            libxml2 \
+            zlib \
+            sqlite3
+
+          brew link --force --overwrite libtool
+          brew link --force --overwrite gettext
+
+      - name: Clone aria2
+        run: |
+          git clone https://github.com/aria2/aria2.git --depth=1
+
+      - name: Build aria2
+        shell: bash
+        run: |
+          set -e
+
+          cd aria2
+
+          glibtoolize --force
+          autoreconf -fiv
+
+          ./configure \
+            --disable-nls \
+            --enable-static \
+            --disable-shared
+
+          # Skip gettext/po build
+          rm -rf po
+          mkdir -p po
+
+          printf 'all:\n\t@echo "Skipping po build."\n' > po/Makefile
+
+          make -j"$(sysctl -n hw.logicalcpu)"
+
+      - name: Verify aria2 arm64
+        run: |
+          file aria2/src/aria2c
+          lipo -info aria2/src/aria2c
+
+          mkdir -p artifact
+          cp aria2/src/aria2c artifact/aria2c-arm64
+          chmod +x artifact/aria2c-arm64
+
+      - name: Upload arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aria2-macos-arm64
+          path: artifact/aria2c-arm64
+
+
+  # ============================================================
+  # Create Universal Binary
+  # ============================================================
+  build-universal:
+    name: Create Universal aria2
+    runs-on: macos-15
+
+    needs:
+      - build-x64
+      - build-arm64
+
+    steps:
+      - name: Download x86_64 aria2
+        uses: actions/download-artifact@v4
+        with:
+          name: aria2-macos-x64
+          path: artifacts/x64
+
+      - name: Download arm64 aria2
+        uses: actions/download-artifact@v4
+        with:
+          name: aria2-macos-arm64
+          path: artifacts/arm64
+
+      - name: Show downloaded files
+        run: |
+          find artifacts -type f -exec file {} \;
+
+      - name: Create Universal binary
+        run: |
+          set -e
+
+          chmod +x artifacts/x64/aria2c-x86_64
+          chmod +x artifacts/arm64/aria2c-arm64
+
+          mkdir -p universal
+
+          lipo \
+            -create \
+            artifacts/x64/aria2c-x86_64 \
+            artifacts/arm64/aria2c-arm64 \
+            -output universal/aria2c
+
+          chmod +x universal/aria2c
+
+      - name: Verify Universal binary
+        run: |
+          file universal/aria2c
+          lipo -info universal/aria2c
+
+          echo "===================================="
+          echo "Universal aria2 created successfully"
+          echo "===================================="
+
+      - name: Test x86_64 slice
+        run: |
+          mkdir -p test-x64
+
+          lipo \
+            universal/aria2c \
+            -thin x86_64 \
+            -output test-x64/aria2c
+
+          chmod +x test-x64/aria2c
+
+          file test-x64/aria2c
+          test-x64/aria2c --version
+
+      - name: Test arm64 slice
+        run: |
+          mkdir -p test-arm64
+
+          lipo \
+            universal/aria2c \
+            -thin arm64 \
+            -output test-arm64/aria2c
+
+          chmod +x test-arm64/aria2c
+
+          file test-arm64/aria2c
+          test-arm64/aria2c --version
+
+      - name: Upload Universal aria2
+        uses: actions/upload-artifact@v4
+        with:
+          name: aria2-macos-universal
+          path: universal/aria2c
