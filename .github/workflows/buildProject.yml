@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Verify aria2 exists
         run: |
@@ -44,8 +44,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
+      - name: List build outputs
+        run: |
+          echo "===== Build outputs ====="
+          ls -lh release/
+
+      - name: Upload DMG installer
         uses: actions/upload-artifact@v4
         with:
-          name: shabdiz-macos
-          path: release/
+          name: shabdiz-macos-dmg
+          path: release/*.dmg
+
+      - name: Upload ZIP installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: shabdiz-macos-zip
+          path: release/*.zip
