@@ -1,3 +1,4 @@
+
 name: Build macOS Universal aria2
 
 on:
@@ -15,8 +16,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show architecture
+      - name: Show runner architecture
         run: |
+          echo "Runner architecture:"
           uname -m
           arch
 
@@ -31,7 +33,8 @@ jobs:
             cppunit \
             libxml2 \
             zlib \
-            sqlite3
+            sqlite3 \
+            gmp
 
           brew link --force --overwrite libtool
           brew link --force --overwrite gettext
@@ -47,6 +50,18 @@ jobs:
 
           cd aria2
 
+          BREW_PREFIX="$(brew --prefix)"
+
+          export CPPFLAGS="-I${BREW_PREFIX}/include"
+          export LDFLAGS="-L${BREW_PREFIX}/lib"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig"
+
+          echo "Homebrew prefix:"
+          echo "${BREW_PREFIX}"
+
+          echo "GMP:"
+          brew --prefix gmp
+
           glibtoolize --force
           autoreconf -fiv
 
@@ -55,7 +70,6 @@ jobs:
             --enable-static \
             --disable-shared
 
-          # Skip gettext/po build
           rm -rf po
           mkdir -p po
 
@@ -63,14 +77,30 @@ jobs:
 
           make -j"$(sysctl -n hw.logicalcpu)"
 
-      - name: Verify aria2 x86_64
+      - name: Check x86_64 binary
         run: |
+          set -e
+
+          echo "=== File ==="
           file aria2/src/aria2c
-          lipo -info aria2/src/aria2c
+
+          echo "=== Architecture ==="
+          lipo -info aria2/src/aria2c || true
+
+          echo "=== Dynamic dependencies ==="
+          otool -L aria2/src/aria2c
+
+      - name: Prepare x86_64 artifact
+        run: |
+          set -e
 
           mkdir -p artifact
+
           cp aria2/src/aria2c artifact/aria2c-x86_64
+
           chmod +x artifact/aria2c-x86_64
+
+          file artifact/aria2c-x86_64
 
       - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
@@ -90,8 +120,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show architecture
+      - name: Show runner architecture
         run: |
+          echo "Runner architecture:"
           uname -m
           arch
 
@@ -106,7 +137,8 @@ jobs:
             cppunit \
             libxml2 \
             zlib \
-            sqlite3
+            sqlite3 \
+            gmp
 
           brew link --force --overwrite libtool
           brew link --force --overwrite gettext
@@ -122,6 +154,18 @@ jobs:
 
           cd aria2
 
+          BREW_PREFIX="$(brew --prefix)"
+
+          export CPPFLAGS="-I${BREW_PREFIX}/include"
+          export LDFLAGS="-L${BREW_PREFIX}/lib"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig"
+
+          echo "Homebrew prefix:"
+          echo "${BREW_PREFIX}"
+
+          echo "GMP:"
+          brew --prefix gmp
+
           glibtoolize --force
           autoreconf -fiv
 
@@ -130,7 +174,6 @@ jobs:
             --enable-static \
             --disable-shared
 
-          # Skip gettext/po build
           rm -rf po
           mkdir -p po
 
@@ -138,14 +181,30 @@ jobs:
 
           make -j"$(sysctl -n hw.logicalcpu)"
 
-      - name: Verify aria2 arm64
+      - name: Check arm64 binary
         run: |
+          set -e
+
+          echo "=== File ==="
           file aria2/src/aria2c
-          lipo -info aria2/src/aria2c
+
+          echo "=== Architecture ==="
+          lipo -info aria2/src/aria2c || true
+
+          echo "=== Dynamic dependencies ==="
+          otool -L aria2/src/aria2c
+
+      - name: Prepare arm64 artifact
+        run: |
+          set -e
 
           mkdir -p artifact
+
           cp aria2/src/aria2c artifact/aria2c-arm64
+
           chmod +x artifact/aria2c-arm64
+
+          file artifact/aria2c-arm64
 
       - name: Upload arm64 artifact
         uses: actions/upload-artifact@v4
@@ -178,9 +237,20 @@ jobs:
           name: aria2-macos-arm64
           path: artifacts/arm64
 
-      - name: Show downloaded files
+      - name: Inspect downloaded binaries
         run: |
-          find artifacts -type f -exec file {} \;
+          set -e
+
+          echo "=== x86_64 ==="
+          file artifacts/x64/aria2c-x86_64
+          lipo -info artifacts/x64/aria2c-x86_64 || true
+          otool -L artifacts/x64/aria2c-x86_64
+
+          echo ""
+          echo "=== arm64 ==="
+          file artifacts/arm64/aria2c-arm64
+          lipo -info artifacts/arm64/aria2c-arm64 || true
+          otool -L artifacts/arm64/aria2c-arm64
 
       - name: Create Universal binary
         run: |
@@ -201,15 +271,46 @@ jobs:
 
       - name: Verify Universal binary
         run: |
+          set -e
+
+          echo "===================================="
+          echo "Universal aria2"
+          echo "===================================="
+
+          echo ""
+          echo "=== File ==="
           file universal/aria2c
+
+          echo ""
+          echo "=== Architectures ==="
           lipo -info universal/aria2c
 
-          echo "===================================="
-          echo "Universal aria2 created successfully"
-          echo "===================================="
+          echo ""
+          echo "=== Dynamic dependencies ==="
+          otool -L universal/aria2c
 
-      - name: Test x86_64 slice
+      - name: Check for Homebrew dependencies
+        shell: bash
         run: |
+          set -e
+
+          echo "Checking for Homebrew dependencies..."
+
+          if otool -L universal/aria2c | grep -E '/opt/homebrew/|/usr/local/opt/'; then
+            echo ""
+            echo "WARNING:"
+            echo "aria2 still has Homebrew dynamic dependencies."
+            echo "The binary may not run on a clean macOS installation."
+            exit 1
+          fi
+
+          echo ""
+          echo "No Homebrew dynamic dependencies found."
+
+      - name: Extract and inspect x86_64 slice
+        run: |
+          set -e
+
           mkdir -p test-x64
 
           lipo \
@@ -219,11 +320,19 @@ jobs:
 
           chmod +x test-x64/aria2c
 
+          echo "=== x86_64 slice ==="
           file test-x64/aria2c
-          test-x64/aria2c --version
 
-      - name: Test arm64 slice
+          lipo -info test-x64/aria2c
+
+          echo ""
+          echo "=== x86_64 dependencies ==="
+          otool -L test-x64/aria2c
+
+      - name: Extract and inspect arm64 slice
         run: |
+          set -e
+
           mkdir -p test-arm64
 
           lipo \
@@ -233,11 +342,31 @@ jobs:
 
           chmod +x test-arm64/aria2c
 
+          echo "=== arm64 slice ==="
           file test-arm64/aria2c
-          test-arm64/aria2c --version
+
+          lipo -info test-arm64/aria2c
+
+          echo ""
+          echo "=== arm64 dependencies ==="
+          otool -L test-arm64/aria2c
+
+      - name: Prepare final artifact
+        run: |
+          set -e
+
+          mkdir -p final
+
+          cp universal/aria2c final/aria2c
+
+          chmod +x final/aria2c
+
+          echo "Final aria2:"
+          file final/aria2c
+          lipo -info final/aria2c
 
       - name: Upload Universal aria2
         uses: actions/upload-artifact@v4
         with:
           name: aria2-macos-universal
-          path: universal/aria2c
+          path: final/aria2c
