@@ -9,6 +9,18 @@
     "start:react": "cd react && npm run dev",
     "start:electron": "cd electron && npm run start",
     "icon": "electron-icon-builder --input=./assets/icon.png --output=build",
+    "icon-flatten": "electron-icon-builder --input=assets/source.png --output=./assets --flatten",
+    "sandbox": "cd electron && sudo chown root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox",
+    "install:node:react": "cd react && npm install",
+    "install:node:electron": "cd electron && npm install",
+    "install:node:root": "npm install",
+    "install:node:all": "npm run install:node:react && npm run install:node:electron && npm run install:node:root",
+    "install:node:backend": "npm run install:node:electron && npm run install:node:root",
+    "remove:node:all": "npm run remove:node:electron && npm run remove:node:root && npm run remove:node:react",
+    "remove:node:electron": "cd electron && rm -rf node_modules package-lock.json",
+    "remove:node:backend": "npm run remove:node:electron && npm run remove:node:root",
+    "remove:node:react": "cd react && rm -rf node_modules package-lock.json",
+    "remove:node:root": "rm -rf node_modules package-lock.json",
     "build": "npm run build:electron && npm run build:react",
     "build:react": "cd react && npm run build",
     "build:electron": "cd electron && npm run build",
@@ -20,8 +32,7 @@
     "package:mac": "npm run build && electron-builder --mac",
     "package:mac:arm64": "npm run build && electron-builder --mac --arm64",
     "package:mac:x64": "npm run build && electron-builder --mac --x64",
-    "postinstall": "electron-builder install-app-deps",
-    "icon-flatten": "electron-icon-builder --input=assets/source.png --output=./assets --flatten"
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "com.yourapp.id",
