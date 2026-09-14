@@ -2,7 +2,7 @@ import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import AddLinkOptions from "@components/addLinkPopup/tabs/AddLinkOptions.tsx"
 import AddLinkProxy from "@components/addLinkPopup/tabs/AddLinkProxy.tsx"
 import AddLinkTab from "@components/addLinkPopup/tabs/AddLinkTab.tsx"
-import AddTorrentTab from "@components/addLinkPopup/tabs/AddTorrentTab.tsx"
+import AddTorrentTab from "@components/addLinkPopup/tabs/AddTorrentTab/AddTorrentTab.tsx"
 import { TAddLinkTabs, TTorrentInputType, TTorrentStep } from "@components/addLinkPopup/types.ts"
 import CustomTitleBar from "@components/customTilebar/CustomTitleBar.tsx"
 import { AddLink, Settings, VpnLock } from "@mui/icons-material"
@@ -15,14 +15,27 @@ import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { resMetadataUrls } from "@src/types.ts"
 import { getIdFromLocation } from "@src/utils.ts"
 import clsx from "clsx"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useLocation } from "react-router-dom"
 import styles from "./sytle.module.scss"
 
+type TSwitchToTorrentLink = {
+  isMagnet: boolean,
+  isTorrent: boolean,
+  linkAddress: string,
+}
 const AddLinkPopup = () => {
   const closePopupWindow = window.electronAPI.closePopupWindow
   const addDownloadDir = window.electronAPI.addDownloadDir
   const addDownloadPopup = window.electronAPI.addDownloadPopup
+
+  const [switchToTorrentLink, setSwitchToTorrentLink] = useState<TSwitchToTorrentLink>({
+    isMagnet: false,
+    isTorrent: false,
+    linkAddress: ""
+  })
+
+  const [clipboardLink, setClipboardLink] = useState("")
 
   const location = useLocation()
   const id = getIdFromLocation(location, ":")
@@ -33,6 +46,36 @@ const AddLinkPopup = () => {
   const proxyConfigs = useAddLinkStore((state) => state.proxyConfig)
   const options = useAddLinkStore((state) => state.options)
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
+
+  // Detect clipboard content once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const clipboardContent = await window.electronAPI.readClipboard()
+        if (clipboardContent.trim().startsWith("magnet:")) {
+          setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
+          return
+        }
+        const cleanUrl = new URL(clipboardContent)
+        cleanUrl.search = ""
+        if (cleanUrl.toString().endsWith(".torrent")) {
+          setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
+          return
+        }
+        // Normal link - pass to AddLinkTab
+        setClipboardLink(clipboardContent)
+      } catch {
+        // Clipboard content is not a valid URL, ignore
+      }
+    })()
+  }, [])
+
+  // Switch to Torrent tab once when clipboard is detected as magnet/torrent
+  useEffect(() => {
+    if (switchToTorrentLink.isTorrent || switchToTorrentLink.isMagnet) {
+      setValue("Torrent")
+    }
+  }, [switchToTorrentLink])
 
   const downloadHandler = async () => {
     if (linkAddressStore) {
@@ -63,25 +106,25 @@ const AddLinkPopup = () => {
   const handleChange = (_event: React.SyntheticEvent, newValue: TAddLinkTabs) => {
     setValue(newValue)
   }
-  
+
   const resetTorrentResult = () => {
     setTorrentMetadata(null)
     setSelectedTorrentIndexes([])
     setTorrentStep("metadata")
     setTorrentError("")
   }
-  
+
   const handleTorrentInputTypeChange = (inputType: TTorrentInputType) => {
     setTorrentInputType(inputType)
     setTorrentInputValue("")
     resetTorrentResult()
   }
-  
+
   const handleTorrentInputValueChange = (inputValue: string) => {
     setTorrentInputValue(inputValue)
     resetTorrentResult()
   }
-  
+
   const handleSelectTorrentFile = async () => {
     try {
       const selectedPath = await window.electronAPI.selectCookieFile("torrent")
@@ -95,7 +138,7 @@ const AddLinkPopup = () => {
       setTorrentError("Failed to select a torrent file.")
     }
   }
-  
+
   const handleTorrentMetadata = async () => {
     const inputValue = torrentInputValue.trim()
     if (!inputValue || torrentLoading) return
@@ -109,12 +152,12 @@ const AddLinkPopup = () => {
     catch (error) {
       console.error("Failed to get torrent metadata File:", error)
     }
-    
+
     if (torrentInputType === "Magnet URL" && !inputValue.startsWith("magnet:")) {
       setTorrentError("Enter a valid magnet URL.")
       return
     }
-    
+
     if (torrentInputType === "Torrent Link") {
       try {
         const url = new URL(inputValue)
@@ -125,7 +168,7 @@ const AddLinkPopup = () => {
         return
       }
     }
-    
+
     setTorrentLoading(true)
     setTorrentError("")
     try {
@@ -146,25 +189,37 @@ const AddLinkPopup = () => {
       setTorrentLoading(false)
     }
   }
-  
+
   const downloadTorrentHandler = async () => {
     const indexes = selectedTorrentIndexes.map((torrentIndex) => {
       return torrentIndex + 1
     })
     const joinIndexes = indexes.join(",")
-    const gid = await window.electronAPI.addTorrentUrl(
-      joinIndexes,
-      `${torrentMetadata?.savePath}/${torrentMetadata?.torrentInfoHash}.torrent`
-    )
+    let gid
+
+    if (torrentInputType === "Torrent File") {
+      const inputValue = torrentInputValue.trim()
+      gid = await window.electronAPI.addTorrentUrl(
+        joinIndexes,
+        inputValue
+      )
+    }
+    else {
+
+      gid = await window.electronAPI.addTorrentUrl(
+        joinIndexes,
+        `${torrentMetadata?.savePath}/${torrentMetadata?.torrentInfoHash}.torrent`
+      )
+    }
     addDownloadPopup(gid, torrentMetadata?.fileName ?? "torrent download")
     closePopupWindow(id)
-    
+
   }
 
   const changeComponents = () => {
     switch (value) {
       case "Link":
-        return <AddLinkTab />
+        return <AddLinkTab initialLink={clipboardLink} />
       case "Proxy":
         return <AddLinkProxy />
       case "Options":
@@ -172,6 +227,8 @@ const AddLinkPopup = () => {
       case "Torrent":
         return (
           <AddTorrentTab
+            setSwitchToTorrentLink={setSwitchToTorrentLink}
+            switchToTorrentLink={switchToTorrentLink}
             inputType={torrentInputType}
             inputValue={torrentInputValue}
             metadata={torrentMetadata}
@@ -187,7 +244,7 @@ const AddLinkPopup = () => {
           />
         )
       default:
-        return <AddLinkTab />
+        return <AddLinkTab initialLink={clipboardLink} />
     }
   }
 
@@ -236,7 +293,7 @@ const AddLinkPopup = () => {
                   >
                     Back
                   </Button>
-                  
+
                   <Button
                     variant={"contained"}
                     size={"small"}
@@ -264,7 +321,7 @@ const AddLinkPopup = () => {
           ) : (
             <div className={"flex gap-2 "}>
               <Button
-                variant={"outlined"}
+                variant={"contained"}
                 color={"success"}
                 size={"small"}
                 endIcon={<DownloadOutlinedIcon />}
@@ -284,7 +341,7 @@ const AddLinkPopup = () => {
               </Button>
             </div>
           )}
-          <Button variant={"outlined"} color={"error"} size={"small"} onClick={() => closePopupWindow(id)}>
+          <Button variant={"contained"} color={"error"} size={"small"} onClick={() => closePopupWindow(id)}>
             Cancel
           </Button>
         </div>

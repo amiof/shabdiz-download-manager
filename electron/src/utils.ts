@@ -393,14 +393,16 @@ export const parseTorrentFile = (pathFile: string, infoHash: string) => {
 export const torrentSavePath = () => {
   const platform = process.platform
   const basePathSelected = electronStore.get("selectedStorageDirectory")
-  let basePath
+  let fullPath
   if (platform === "win32") {
-    basePath = basePathSelected ?? app.getPath("downloads")
+   const  basePath = basePathSelected ?? app.getPath("downloads")
+     fullPath =`${basePath}\\Shabdiz-DM\\torrents`
   }
   else {
-    basePath = basePathSelected ?? os.homedir()
+  const basePath = basePathSelected ?? os.homedir()
+    fullPath =`${basePath}/Shabdiz-DM/torrents`
   }
-  return `${basePath}/Shabdiz-DM/torrents`
+  return fullPath
 }
 
 // time must be like "12:30" for use this function

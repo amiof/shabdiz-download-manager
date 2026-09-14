@@ -50,6 +50,7 @@ export const downloaderAction = (set: SetState, get: GetState): TDownloaderActio
 
     const downloads = [...filteredCompletedStop, ...tellWaiting, ...tellActive, ...completedRowsFromDB]
 
+
     const downloadsRows: TDownloads[] = await Promise.all(
       downloads.map(async (download, index) => {
         const fileName = getFileName(download.files[0].path)
@@ -58,13 +59,22 @@ export const downloaderAction = (set: SetState, get: GetState): TDownloaderActio
           ? downloadedFilesDetails[fileName].createdAt
           : new Date()
 
+        const getTorrentFolderName = (filePath: string) => {
+          const parts = filePath.split("/");
+          const torrentsIndex = parts.indexOf("torrents");
+
+          if (torrentsIndex === -1) return "";
+
+          return parts[torrentsIndex + 1] ?? "";
+        };
+
         const optionFileName =
           download.status === "complete" ? fileName : await get().getFilenameFromOption(download.gid)
 
         return {
           Id: index + 1,
-          FileName: optionFileName,
-          Url: download?.files[0]?.uris[0]?.uri,
+          FileName:download.infoHash? getTorrentFolderName(download.files[0].path) : optionFileName ,
+          Url: download.infoHash? "Torrent" :download?.files[0]?.uris[0]?.uri,
           SavePath: download?.dir,
           Size: formatBytes(+download.totalLength),
           CreatedAt: fileCreateAte,

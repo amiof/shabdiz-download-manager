@@ -225,7 +225,8 @@ export const ipcUtilsHandler = () => {
       torrentFiles: []
     }
     const infoHash = path.basename(torrentPath, ".torrent")
-    const parsed = parseTorrentFile(torrentSavePath(), infoHash)
+    const address=path.dirname(torrentPath)
+    const parsed = parseTorrentFile(address, infoHash)
     
     if (parsed) {
       urlResponse.fileName = parsed.name
@@ -480,7 +481,7 @@ export const ipcUtilsHandler = () => {
   )
 
   ipcMain.handle(UTILS_CHANNELS.READ_CLIPBOARD, () => {
-    const text = clipboard.readText()
+    const text = clipboard.readText().trim()
 
     if (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("magnet:")) {
       return text
