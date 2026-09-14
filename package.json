@@ -5,7 +5,7 @@
   "scripts": {
     "lint": "biome check .",
     "format": "biome format . --write",
-    "start": "concurrently \"npm run start:react\"  \"npm run start:electron\"",
+    "start": "concurrently \"npm run start:react\" \"npm run start:electron\"",
     "start:react": "cd react && npm run dev",
     "start:electron": "cd electron && npm run start",
     "icon": "electron-icon-builder --input=./assets/icon.png --output=build",
@@ -17,6 +17,9 @@
     "package:linux:rpm": "npm run build && electron-builder --linux rpm --x64",
     "package:win": "npm run build && electron-builder --win",
     "package:mac:zip": "npm run build && electron-builder --mac=zip",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:mac:arm64": "npm run build && electron-builder --mac --arm64",
+    "package:mac:x64": "npm run build && electron-builder --mac --x64",
     "postinstall": "electron-builder install-app-deps",
     "icon-flatten": "electron-icon-builder --input=assets/source.png --output=./assets --flatten"
   },
@@ -57,13 +60,6 @@
           "**/*"
         ]
       },
-      {
-        "from": "electron/src/release-aria2/",
-        "to": "electron/dist",
-        "filter": [
-          "**/*"
-        ]
-      },
       "./assets/**"
     ],
     "mac": {
@@ -83,6 +79,15 @@
           ]
         }
       ],
+      "extraResources": [
+        {
+          "from": "electron/src/release-aria2/bin/macOS/",
+          "to": "electron/dist/bin/macOS/",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ],
       "identity": null,
       "icon": "icons"
     },
@@ -93,6 +98,15 @@
       "target": [
         "nsis",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "electron/src/release-aria2/bin/win/",
+          "to": "electron/dist/bin/win/",
+          "filter": [
+            "**/*"
+          ]
+        }
       ],
       "signExts": false,
       "icon": "icons",
@@ -151,7 +165,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
-    "electron": "^43.6.0",
+    "electron": "43.6.0",
     "electron-builder": "^26.15.3",
     "electron-icon-builder": "^2.0.1"
   }
