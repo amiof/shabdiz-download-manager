@@ -1,667 +1,350 @@
 
-name: Build macOS Universal aria2
+name: Build aria2 macOS Universal
 
 on:
   workflow_dispatch:
 
 jobs:
-  # ============================================================
-  # Build aria2 for Intel x86_64
-  # ============================================================
   build-x64:
-    name: Build aria2 x86_64
+    name: Build aria2 x64
     runs-on: macos-15-intel
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show architecture
+      - name: Install build tools
         run: |
-          set -e
+          brew update
+          brew install autoconf automake libtool gettext pkg-config
 
-          echo "Runner:"
-          uname -m
-          arch
-
-      - name: Install build dependencies
+      - name: Prepare directories
         run: |
-          set -e
-
-          brew install \
-            autoconf \
-            automake \
-            libtool \
-            gettext \
-            pkg-config \
-            openssl \
-            libxml2 \
-            zlib \
-            sqlite3
-
-          brew link --force --overwrite libtool
-          brew link --force --overwrite gettext
-
-      # ----------------------------------------------------------
-      # Build all aria2 dependencies statically
-      # ----------------------------------------------------------
-      - name: Build static dependencies
-        shell: bash
-        run: |
-          set -e
-
           mkdir -p "$GITHUB_WORKSPACE/deps"
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/x64"
 
-          DEPS="$GITHUB_WORKSPACE/deps"
-
-          echo "Dependencies directory:"
-          echo "$DEPS"
-
-          # ======================================================
-          # GMP
-          # ======================================================
-
-          GMP_VERSION="6.3.0"
-
-          curl -L \
-            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            -o gmp.tar.xz
-
-          tar -xf gmp.tar.xz
-
-          cd "gmp-${GMP_VERSION}"
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static \
-            --disable-cxx
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          # ======================================================
-          # c-ares
-          # ======================================================
-
-          CARES_VERSION="1.34.5"
-
-          curl -L \
-            "https://github.com/c-ares/c-ares/releases/download/cares-${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz" \
-            -o c-ares.tar.gz
-
-          tar -xf c-ares.tar.gz
-
-          cd "c-ares-${CARES_VERSION}"
-
-          autoreconf -fi
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          # ======================================================
-          # libssh2
-          # ======================================================
-
-          LIBSSH2_VERSION="1.11.1"
-
-          curl -L \
-            "https://www.libssh2.org/download/libssh2-${LIBSSH2_VERSION}.tar.gz" \
-            -o libssh2.tar.gz
-
-          tar -xf libssh2.tar.gz
-
-          cd "libssh2-${LIBSSH2_VERSION}"
-
-          autoreconf -fi
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static \
-            --with-openssl
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          # ======================================================
-          # Verify static libraries
-          # ======================================================
-
-          echo ""
-          echo "======================================"
-          echo "Static libraries"
-          echo "======================================"
-
-          find "$DEPS/lib" \
-            -maxdepth 1 \
-            -type f \
-            \( \
-              -name "libgmp.a" \
-              -o -name "libcares.a" \
-              -o -name "libssh2.a" \
-            \) \
-            -print
-
-      # ----------------------------------------------------------
-      # Build aria2
-      # ----------------------------------------------------------
-      - name: Clone aria2
+      - name: Build GMP
+        env:
+          ARCH: x86_64
+          DEPS: ${{ github.workspace }}/deps
         run: |
-          git clone https://github.com/aria2/aria2.git --depth=1
+          set -euxo pipefail
+
+          cd "$DEPS"
+
+          curl -fL --retry 5 --retry-all-errors \
+            "https://ftpmirror.gnu.org/gmp/gmp-6.3.0.tar.xz" \
+            -o gmp-6.3.0.tar.xz
+
+          tar -xf gmp-6.3.0.tar.xz
+          cd gmp-6.3.0
+
+          ./configure \
+            --prefix="$DEPS/gmp" \
+            --disable-shared \
+            --enable-static \
+            --disable-cxx \
+            --build="$ARCH-apple-darwin"
+
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+
+      - name: Build c-ares
+        env:
+          ARCH: x86_64
+          DEPS: ${{ github.workspace }}/deps
+        run: |
+          set -euxo pipefail
+
+          cd "$DEPS"
+
+          curl -fL --retry 5 --retry-all-errors \
+            "https://github.com/c-ares/c-ares/releases/download/cares-1_34_5/c-ares-1.34.5.tar.gz" \
+            -o c-ares-1.34.5.tar.gz
+
+          tar -xf c-ares-1.34.5.tar.gz
+          cd c-ares-1.34.5
+
+          ./configure \
+            --prefix="$DEPS/c-ares" \
+            --disable-shared \
+            --enable-static \
+            --build="$ARCH-apple-darwin"
+
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
 
       - name: Build aria2
-        shell: bash
+        env:
+          ARCH: x86_64
+          DEPS: ${{ github.workspace }}/deps
         run: |
-          set -e
+          set -euxo pipefail
 
-          cd aria2
+          cd "$GITHUB_WORKSPACE/build"
 
-          DEPS="$GITHUB_WORKSPACE/deps"
-          BREW_PREFIX="$(brew --prefix)"
+          curl -fL --retry 5 --retry-all-errors \
+            "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz" \
+            -o aria2.tar.xz
 
-          export CPPFLAGS="
-            -I${DEPS}/include
-            -I${BREW_PREFIX}/include
+          tar -xf aria2.tar.xz
+          cd aria2-1.37.0
+
+          export CPPFLAGS="\
+          -I$DEPS/gmp/include \
+          -I$DEPS/c-ares/include \
           "
 
-          export LDFLAGS="
-            -L${DEPS}/lib
-            -L${BREW_PREFIX}/lib
+          export LDFLAGS="\
+          -L$DEPS/gmp/lib \
+          -L$DEPS/c-ares/lib \
           "
-
-          export PKG_CONFIG_PATH="${DEPS}/lib/pkgconfig"
-
-          export LIBS="
-            ${DEPS}/lib/libgmp.a
-            ${DEPS}/lib/libssh2.a
-            ${DEPS}/lib/libcares.a
-          "
-
-          glibtoolize --force
-          autoreconf -fiv
 
           ./configure \
-            --disable-nls \
-            --enable-static \
-            --disable-shared \
             ARIA2_STATIC=yes \
-            --with-libcares \
-            --with-libgmp \
-            --with-libssh2 \
-            --with-openssl
+            --prefix="$DEPS/aria2" \
+            --disable-shared \
+            --enable-static \
+            --with-libgmp="$DEPS/gmp" \
+            --with-libcares="$DEPS/c-ares" \
+            --without-libssh2 \
+            --without-gnutls \
+            --without-openssl \
+            --with-appletls \
+            --without-libxml2
 
-          rm -rf po
-          mkdir -p po
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
 
-          printf 'all:\n\t@echo "Skipping po build."\n' > po/Makefile
+          cp "$DEPS/aria2/bin/aria2c" \
+            "$GITHUB_WORKSPACE/artifacts/x64/aria2c-x86_64"
 
-          make -j"$(sysctl -n hw.logicalcpu)"
+          chmod +x \
+            "$GITHUB_WORKSPACE/artifacts/x64/aria2c-x86_64"
 
-      - name: Inspect x86_64 aria2
+      - name: Inspect x64 binary
         run: |
-          set -e
+          set -euxo pipefail
 
-          echo "======================================"
-          echo "x86_64 aria2"
-          echo "======================================"
+          file artifacts/x64/aria2c-x86_64
+          otool -hv artifacts/x64/aria2c-x86_64
+          otool -L artifacts/x64/aria2c-x86_64
 
-          file aria2/src/aria2c
-
-          echo ""
-          echo "Architecture:"
-          lipo -info aria2/src/aria2c || true
-
-          echo ""
-          echo "Dynamic dependencies:"
-          otool -L aria2/src/aria2c
-
-      - name: Prepare x86_64 artifact
-        run: |
-          set -e
-
-          mkdir -p artifact
-
-          cp aria2/src/aria2c artifact/aria2c-x86_64
-
-          chmod +x artifact/aria2c-x86_64
-
-      - name: Upload x86_64 artifact
+      - name: Upload x64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: aria2-macos-x64
-          path: artifact/aria2c-x86_64
+          path: artifacts/x64/aria2c-x86_64
 
-
-  # ============================================================
-  # Build aria2 for Apple Silicon ARM64
-  # ============================================================
   build-arm64:
     name: Build aria2 arm64
     runs-on: macos-15
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show architecture
+      - name: Install build tools
         run: |
-          set -e
+          brew update
+          brew install autoconf automake libtool gettext pkg-config
 
-          echo "Runner:"
-          uname -m
-          arch
-
-      - name: Install build dependencies
+      - name: Prepare directories
         run: |
-          set -e
-
-          brew install \
-            autoconf \
-            automake \
-            libtool \
-            gettext \
-            pkg-config \
-            openssl \
-            libxml2 \
-            zlib \
-            sqlite3
-
-          brew link --force --overwrite libtool
-          brew link --force --overwrite gettext
-
-      # ----------------------------------------------------------
-      # Build all aria2 dependencies statically
-      # ----------------------------------------------------------
-      - name: Build static dependencies
-        shell: bash
-        run: |
-          set -e
-
           mkdir -p "$GITHUB_WORKSPACE/deps"
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/arm64"
 
-          DEPS="$GITHUB_WORKSPACE/deps"
-
-          # ======================================================
-          # GMP
-          # ======================================================
-
-          GMP_VERSION="6.3.0"
-
-          curl -L \
-            "https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz" \
-            -o gmp.tar.xz
-
-          tar -xf gmp.tar.xz
-
-          cd "gmp-${GMP_VERSION}"
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static \
-            --disable-cxx
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          # ======================================================
-          # c-ares
-          # ======================================================
-
-          CARES_VERSION="1.34.5"
-
-          curl -L \
-            "https://github.com/c-ares/c-ares/releases/download/cares-${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz" \
-            -o c-ares.tar.gz
-
-          tar -xf c-ares.tar.gz
-
-          cd "c-ares-${CARES_VERSION}"
-
-          autoreconf -fi
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          # ======================================================
-          # libssh2
-          # ======================================================
-
-          LIBSSH2_VERSION="1.11.1"
-
-          curl -L \
-            "https://www.libssh2.org/download/libssh2-${LIBSSH2_VERSION}.tar.gz" \
-            -o libssh2.tar.gz
-
-          tar -xf libssh2.tar.gz
-
-          cd "libssh2-${LIBSSH2_VERSION}"
-
-          autoreconf -fi
-
-          ./configure \
-            --prefix="$DEPS" \
-            --disable-shared \
-            --enable-static \
-            --with-openssl
-
-          make -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-          cd "$GITHUB_WORKSPACE"
-
-          echo ""
-          echo "======================================"
-          echo "Static libraries"
-          echo "======================================"
-
-          find "$DEPS/lib" \
-            -maxdepth 1 \
-            -type f \
-            \( \
-              -name "libgmp.a" \
-              -o -name "libcares.a" \
-              -o -name "libssh2.a" \
-            \) \
-            -print
-
-      # ----------------------------------------------------------
-      # Build aria2
-      # ----------------------------------------------------------
-      - name: Clone aria2
+      - name: Build GMP
+        env:
+          ARCH: arm64
+          DEPS: ${{ github.workspace }}/deps
         run: |
-          git clone https://github.com/aria2/aria2.git --depth=1
+          set -euxo pipefail
+
+          cd "$DEPS"
+
+          curl -fL --retry 5 --retry-all-errors \
+            "https://ftpmirror.gnu.org/gmp/gmp-6.3.0.tar.xz" \
+            -o gmp-6.3.0.tar.xz
+
+          tar -xf gmp-6.3.0.tar.xz
+          cd gmp-6.3.0
+
+          ./configure \
+            --prefix="$DEPS/gmp" \
+            --disable-shared \
+            --enable-static \
+            --disable-cxx \
+            --build="$ARCH-apple-darwin"
+
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+
+      - name: Build c-ares
+        env:
+          ARCH: arm64
+          DEPS: ${{ github.workspace }}/deps
+        run: |
+          set -euxo pipefail
+
+          cd "$DEPS"
+
+          curl -fL --retry 5 --retry-all-errors \
+            "https://github.com/c-ares/c-ares/releases/download/cares-1_34_5/c-ares-1.34.5.tar.gz" \
+            -o c-ares-1.34.5.tar.gz
+
+          tar -xf c-ares-1.34.5.tar.gz
+          cd c-ares-1.34.5
+
+          ./configure \
+            --prefix="$DEPS/c-ares" \
+            --disable-shared \
+            --enable-static \
+            --build="$ARCH-apple-darwin"
+
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
 
       - name: Build aria2
-        shell: bash
+        env:
+          ARCH: arm64
+          DEPS: ${{ github.workspace }}/deps
         run: |
-          set -e
+          set -euxo pipefail
 
-          cd aria2
+          cd "$GITHUB_WORKSPACE/build"
 
-          DEPS="$GITHUB_WORKSPACE/deps"
-          BREW_PREFIX="$(brew --prefix)"
+          curl -fL --retry 5 --retry-all-errors \
+            "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0.tar.xz" \
+            -o aria2.tar.xz
 
-          export CPPFLAGS="
-            -I${DEPS}/include
-            -I${BREW_PREFIX}/include
+          tar -xf aria2.tar.xz
+          cd aria2-1.37.0
+
+          export CPPFLAGS="\
+          -I$DEPS/gmp/include \
+          -I$DEPS/c-ares/include \
           "
 
-          export LDFLAGS="
-            -L${DEPS}/lib
-            -L${BREW_PREFIX}/lib
+          export LDFLAGS="\
+          -L$DEPS/gmp/lib \
+          -L$DEPS/c-ares/lib \
           "
-
-          export PKG_CONFIG_PATH="${DEPS}/lib/pkgconfig"
-
-          export LIBS="
-            ${DEPS}/lib/libgmp.a
-            ${DEPS}/lib/libssh2.a
-            ${DEPS}/lib/libcares.a
-          "
-
-          glibtoolize --force
-          autoreconf -fiv
 
           ./configure \
-            --disable-nls \
-            --enable-static \
-            --disable-shared \
             ARIA2_STATIC=yes \
-            --with-libcares \
-            --with-libgmp \
-            --with-libssh2 \
-            --with-openssl
+            --prefix="$DEPS/aria2" \
+            --disable-shared \
+            --enable-static \
+            --with-libgmp="$DEPS/gmp" \
+            --with-libcares="$DEPS/c-ares" \
+            --without-libssh2 \
+            --without-gnutls \
+            --without-openssl \
+            --with-appletls \
+            --without-libxml2
 
-          rm -rf po
-          mkdir -p po
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
 
-          printf 'all:\n\t@echo "Skipping po build."\n' > po/Makefile
+          cp "$DEPS/aria2/bin/aria2c" \
+            "$GITHUB_WORKSPACE/artifacts/arm64/aria2c-arm64"
 
-          make -j"$(sysctl -n hw.logicalcpu)"
+          chmod +x \
+            "$GITHUB_WORKSPACE/artifacts/arm64/aria2c-arm64"
 
-      - name: Inspect arm64 aria2
+      - name: Inspect arm64 binary
         run: |
-          set -e
+          set -euxo pipefail
 
-          echo "======================================"
-          echo "arm64 aria2"
-          echo "======================================"
-
-          file aria2/src/aria2c
-
-          echo ""
-          echo "Architecture:"
-          lipo -info aria2/src/aria2c || true
-
-          echo ""
-          echo "Dynamic dependencies:"
-          otool -L aria2/src/aria2c
-
-      - name: Prepare arm64 artifact
-        run: |
-          set -e
-
-          mkdir -p artifact
-
-          cp aria2/src/aria2c artifact/aria2c-arm64
-
-          chmod +x artifact/aria2c-arm64
+          file artifacts/arm64/aria2c-arm64
+          otool -hv artifacts/arm64/aria2c-arm64
+          otool -L artifacts/arm64/aria2c-arm64
 
       - name: Upload arm64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: aria2-macos-arm64
-          path: artifact/aria2c-arm64
+          path: artifacts/arm64/aria2c-arm64
 
-
-  # ============================================================
-  # Create Universal Binary
-  # ============================================================
-  build-universal:
+  universal:
     name: Create Universal aria2
-    runs-on: macos-15
-
     needs:
       - build-x64
       - build-arm64
 
+    runs-on: macos-15
+
     steps:
-      - name: Download x86_64 aria2
+      - name: Download x64 artifact
         uses: actions/download-artifact@v4
         with:
           name: aria2-macos-x64
           path: artifacts/x64
 
-      - name: Download arm64 aria2
+      - name: Download arm64 artifact
         uses: actions/download-artifact@v4
         with:
           name: aria2-macos-arm64
           path: artifacts/arm64
 
-      - name: Inspect architecture-specific binaries
-        run: |
-          set -e
-
-          echo "======================================"
-          echo "x86_64"
-          echo "======================================"
-
-          file artifacts/x64/aria2c-x86_64
-          lipo -info artifacts/x64/aria2c-x86_64 || true
-
-          echo ""
-          otool -L artifacts/x64/aria2c-x86_64
-
-          echo ""
-          echo "======================================"
-          echo "arm64"
-          echo "======================================"
-
-          file artifacts/arm64/aria2c-arm64
-          lipo -info artifacts/arm64/aria2c-arm64 || true
-
-          echo ""
-          otool -L artifacts/arm64/aria2c-arm64
-
-      # ----------------------------------------------------------
-      # Create Universal binary
-      # ----------------------------------------------------------
       - name: Create Universal binary
         run: |
-          set -e
+          set -euxo pipefail
+
+          mkdir -p universal
 
           chmod +x artifacts/x64/aria2c-x86_64
           chmod +x artifacts/arm64/aria2c-arm64
 
-          mkdir -p universal
-
-          lipo \
-            -create \
+          lipo -create \
             artifacts/x64/aria2c-x86_64 \
             artifacts/arm64/aria2c-arm64 \
             -output universal/aria2c
 
           chmod +x universal/aria2c
 
-      # ----------------------------------------------------------
-      # Verify Universal binary
-      # ----------------------------------------------------------
       - name: Verify Universal binary
         run: |
-          set -e
+          set -euxo pipefail
 
-          echo "======================================"
-          echo "Universal aria2"
-          echo "======================================"
-
-          echo ""
-          echo "File:"
+          echo "===== FILE ====="
           file universal/aria2c
 
-          echo ""
-          echo "Architecture:"
+          echo "===== LIPO INFO ====="
           lipo -info universal/aria2c
 
-          echo ""
-          echo "Dynamic dependencies:"
+          echo "===== ARCHITECTURE ====="
+          otool -hv universal/aria2c
+
+          echo "===== DEPENDENCIES ====="
           otool -L universal/aria2c
 
-      # ----------------------------------------------------------
-      # Make sure Homebrew libraries are NOT required
-      # ----------------------------------------------------------
-      - name: Check dynamic dependencies
-        shell: bash
-        run: |
-          set -e
+          echo "===== CHECK HOMEBREW DEPENDENCIES ====="
 
-          echo "Checking for Homebrew dependencies..."
+          if otool -L universal/aria2c | grep -E \
+            '/opt/homebrew/|/usr/local/opt/|/opt/local/'; then
 
-          if otool -L universal/aria2c | grep -E '/opt/homebrew/|/usr/local/opt/'; then
-            echo ""
-            echo "ERROR:"
-            echo "aria2 still has Homebrew dynamic dependencies."
-            echo ""
-            echo "The binary is NOT portable yet."
-            echo ""
-            echo "Dynamic dependencies:"
-            otool -L universal/aria2c
-
+            echo "ERROR: aria2c still has a package-manager dependency."
             exit 1
           fi
 
-          echo ""
-          echo "======================================"
-          echo "SUCCESS"
-          echo "======================================"
-          echo "No Homebrew dynamic dependencies found."
+          echo "No Homebrew/MacPorts dynamic dependencies found."
 
-      # ----------------------------------------------------------
-      # Verify each architecture slice
-      # ----------------------------------------------------------
-      - name: Verify x86_64 slice
+      - name: Test x64 slice
         run: |
-          set -e
+          set -euxo pipefail
+          arch -x86_64 universal/aria2c --version
 
-          mkdir -p test-x64
-
-          lipo \
-            universal/aria2c \
-            -thin x86_64 \
-            -output test-x64/aria2c
-
-          chmod +x test-x64/aria2c
-
-          echo "x86_64 slice:"
-          file test-x64/aria2c
-
-          echo ""
-          echo "Dependencies:"
-          otool -L test-x64/aria2c
-
-      - name: Verify arm64 slice
+      - name: Test arm64 slice
         run: |
-          set -e
+          set -euxo pipefail
+          arch -arm64 universal/aria2c --version
 
-          mkdir -p test-arm64
-
-          lipo \
-            universal/aria2c \
-            -thin arm64 \
-            -output test-arm64/aria2c
-
-          chmod +x test-arm64/aria2c
-
-          echo "arm64 slice:"
-          file test-arm64/aria2c
-
-          echo ""
-          echo "Dependencies:"
-          otool -L test-arm64/aria2c
-
-      # ----------------------------------------------------------
-      # Prepare final artifact
-      # ----------------------------------------------------------
-      - name: Prepare final artifact
-        run: |
-          set -e
-
-          mkdir -p final
-
-          cp universal/aria2c final/aria2c
-
-          chmod +x final/aria2c
-
-          echo "======================================"
-          echo "FINAL ARIA2"
-          echo "======================================"
-
-          file final/aria2c
-          lipo -info final/aria2c
-
-      - name: Upload Universal aria2
+      - name: Upload Universal artifact
         uses: actions/upload-artifact@v4
         with:
           name: aria2-macos-universal
-          path: final/aria2c
+          path: universal/aria2c
