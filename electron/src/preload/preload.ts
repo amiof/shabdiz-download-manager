@@ -33,7 +33,7 @@ interface ElectronAPI {
   getTellStatus: (gid: string) => Promise<unknown>
   getGlobalStates: () => Promise<unknown>
   addDownloadPopup: (id: string, windowTitle?: string) => void
-  addLinkPopup: (id: string) => void
+  addLinkPopup: (id: string,url?:string) => void
   openSharePopup: (id: string) => Promise<unknown>
   setSelectedRowsForShare: (rows: unknown[]) => void
   getSelectedRowsForShare: () => Promise<unknown[]>
@@ -129,7 +129,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     options?: TOptionsConfig | null
   ) => await ipcRenderer.invoke("add-download-dir", url, dir, outFileName, proxyConfig, options),
   getDownloads: () => ipcRenderer.invoke("get-downloads"),
-  addLinkPopup: (id: string) => ipcRenderer.send("add-link-popup", id),
+  addLinkPopup: (id: string,url?:string) => ipcRenderer.send("add-link-popup", id,url),
   closePopupWindow: (id: string) => ipcRenderer.send("close-popup", id),
   getTellStatus: (gid: string) => ipcRenderer.invoke("get-tell-status", gid),
   addDownloadPopup: (id: string, windowTitle?: string) => ipcRenderer.invoke("popup-start-download", id, windowTitle),

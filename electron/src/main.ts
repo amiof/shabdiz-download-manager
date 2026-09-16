@@ -7,6 +7,7 @@ import ipcGetDataHandler from "./ipc/getData/getDataHandler"
 import ipcPopupHandler from "./ipc/openPopup/popupHandler"
 import { checkAndCreateFolder, checkSessionExists } from "./utils"
 import "./store/electronStore"
+import { server } from "./http-server/httpServer"
 import { ipcActionsHandler } from "./ipc/actions/actionsHandler"
 import { POPUP_CHANNELS } from "./ipc/channels"
 import { ipcConfigHandler } from "./ipc/config/configHandler"
@@ -19,6 +20,9 @@ import { SchedulerProcess } from "./schedulerProcess/schedulerProcess"
 export let mainWindow: BrowserWindow | null
 
 let isQuitting = false
+
+//server port for get download link from browser extension
+const PORT = 3325
 
 export const schedulers: Record<string, ReturnType<typeof setTimeout> | undefined> = {}
 
@@ -150,25 +154,26 @@ ipcMain.on(POPUP_CHANNELS.CLOSE_MAIN_POPUP, (_, id) => {
   app.quit()
 })
 
-
 app.on("before-quit", async (event) => {
   if (isQuitting) {
     return
   }
-  
+
   event.preventDefault()
-  
+
   isQuitting = true
-  
+
   try {
     await aria2.shutdown()
-  }
-  catch (error) {
+  } catch (error) {
     console.error("Failed to shutdown aria2:", error)
-  }
-  finally {
+  } finally {
     app.quit()
   }
+})
+
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`Shabdiz API running on http://127.0.0.1:${PORT}`)
 })
 
 // IPC handlers
