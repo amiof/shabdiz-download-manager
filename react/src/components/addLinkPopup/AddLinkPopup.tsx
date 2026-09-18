@@ -13,10 +13,9 @@ import NavigateNextOutlinedIcon from "@mui/icons-material/NavigateNextOutlined"
 import { Button, Tab, Tabs } from "@mui/material"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { resMetadataUrls } from "@src/types.ts"
-import { getIdFromLocation } from "@src/utils.ts"
 import clsx from "clsx"
 import { useEffect, useState } from "react"
-import { useLocation } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import styles from "./sytle.module.scss"
 
 type TSwitchToTorrentLink = {
@@ -37,8 +36,11 @@ const AddLinkPopup = () => {
 
   const [clipboardLink, setClipboardLink] = useState("")
 
-  const location = useLocation()
-  const id = getIdFromLocation(location, ":")
+  const { id, urlLink } = useParams()
+
+  const link = urlLink?.replace(/^:/, "") ?? ""
+  const winId = id?.replace(/^:/, "") ?? ""
+
 
   const linkAddressStore = useAddLinkStore((state) => state.linkAddressStore)
   const savePathStore = useAddLinkStore((state) => state.savePathStore)
@@ -50,24 +52,46 @@ const AddLinkPopup = () => {
   // Detect clipboard content once on mount
   useEffect(() => {
     (async () => {
-      try {
-        const clipboardContent = await window.electronAPI.readClipboard()
-        if (clipboardContent.trim().startsWith("magnet:")) {
-          setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
-          return
+
+        try {
+          // if link from browser send (user installed browser extension)
+          if (link) {
+            if (link.trim().startsWith("magnet:")) {
+              setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: link })
+              return
+
+            }
+            const cleanUrl = new URL(link)
+            cleanUrl.search = ""
+            if (cleanUrl.toString().endsWith(".torrent")) {
+              setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: link })
+              return
+            }
+            setClipboardLink(link)
+          }else {
+
+            //read from clipboard user yourself  add link
+            const clipboardContent = await window.electronAPI.readClipboard()
+            if (clipboardContent.trim().startsWith("magnet:")) {
+              setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
+              return
+            }
+            const cleanUrl = new URL(clipboardContent)
+            cleanUrl.search = ""
+            if (cleanUrl.toString().endsWith(".torrent")) {
+              setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
+              return
+            }
+            // Normal link - pass to AddLinkTab
+            setClipboardLink(clipboardContent)
+          }
         }
-        const cleanUrl = new URL(clipboardContent)
-        cleanUrl.search = ""
-        if (cleanUrl.toString().endsWith(".torrent")) {
-          setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
-          return
+        catch {
+          // Clipboard content is not a valid URL, ignore
         }
-        // Normal link - pass to AddLinkTab
-        setClipboardLink(clipboardContent)
-      } catch {
-        // Clipboard content is not a valid URL, ignore
       }
-    })()
+    )
+    ()
   }, [])
 
   // Switch to Torrent tab once when clipboard is detected as magnet/torrent
@@ -81,7 +105,7 @@ const AddLinkPopup = () => {
     if (linkAddressStore) {
       const gid = await addDownloadDir(linkAddressStore, savePathStore, fileNameStore, proxyConfigs, options)
       addDownloadPopup(gid, fileNameStore)
-      closePopupWindow(id)
+      closePopupWindow(winId)
     }
   }
   const addDownloadLink = async () => {
@@ -90,7 +114,7 @@ const AddLinkPopup = () => {
     setDownloadDataToElectron(tellStatus)
     window.electronAPI.stopDownloadByGid(gid)
     setTimeout(async () => {
-      closePopupWindow(id)
+      closePopupWindow(winId)
     }, 1000)
   }
 
@@ -212,7 +236,7 @@ const AddLinkPopup = () => {
       )
     }
     addDownloadPopup(gid, torrentMetadata?.fileName ?? "torrent download")
-    closePopupWindow(id)
+    closePopupWindow(winId)
 
   }
 
@@ -250,7 +274,7 @@ const AddLinkPopup = () => {
 
   return (
     <div className="flex flex-col w-full h-full">
-      <CustomTitleBar id={id}>
+      <CustomTitleBar id={winId}>
         <div
           className={clsx(
             "w-25 bg-[#0d1420] mb-1 text-center rounded-xl font-bold border border-[rgba(255,255,255,0.3)] ",
@@ -341,7 +365,7 @@ const AddLinkPopup = () => {
               </Button>
             </div>
           )}
-          <Button variant={"contained"} color={"error"} size={"small"} onClick={() => closePopupWindow(id)}>
+          <Button variant={"contained"} color={"error"} size={"small"} onClick={() => closePopupWindow(winId)}>
             Cancel
           </Button>
         </div>
