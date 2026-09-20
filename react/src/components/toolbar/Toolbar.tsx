@@ -149,23 +149,24 @@ const Toolbar = () => {
       action: openShareHandler
     }
   ]
-
-  const addDownloadDir = window.electronAPI.addDownloadDir
+  
+  // const addDownloadDir = window.electronAPI.addDownloadDir
   const addLinkPopup = window.electronAPI.addLinkPopup
   const openOptionsPopup = window.electronAPI.openOptionsPopup
   const openSchedulerPopup = window.electronAPI.openSchedulerPopup
   const openSharePopup = window.electronAPI.openSharePopup
   const openEditDownloadPopup = window.electronAPI.openEditDownloadPopup
-
-  const getAllDownloadRow = useDownloaderStore((state) => state.getAllDownloadsRow)
+  
+  // const getAllDownloadRow = useDownloaderStore((state) => state.getAllDownloadsRow)
 
   const clickHandler = async () => {
-    const result = await addDownloadDir(
-      "https://www.pixelstalk.net/wp-content/uploads/2016/08/Best-Free-Desktop-Wallpaper-HD.jpg"
-    )
-    if (result) {
-      getAllDownloadRow()
-    }
+    console.log("this is test for download")
+    // const result = await addDownloadDir(
+    //   "https://www.pixelstalk.net/wp-content/uploads/2016/08/Best-Free-Desktop-Wallpaper-HD.jpg"
+    // )
+    // if (result) {
+    //   getAllDownloadRow()
+    // }
   }
   const createPopup = () => {
     const id = generateId()
