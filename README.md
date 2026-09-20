@@ -38,6 +38,13 @@ A modern, cross-platform download manager built with Electron, React, and aria2c
 - **Proxy Support**: Configure HTTP/HTTPS proxy settings
 - **Torrent Configuration**: Fine-tune DHT, peer exchange, seed ratio, and live seeder indicators
 - **Storage Management**: Select and manage download storage directories
+- **Browser Extension Support**: Send download links directly from Chrome or Firefox to Shabdiz via the [Shabdiz Browser Extension](https://github.com/amiof/shabdiz-browser-extension)
+
+## 🧩 Browser Extension
+
+Shabdiz ships with a companion browser extension for **Chrome** and **Firefox**. Once installed, you can send download links from your browser straight to the download manager — Shabdiz runs a local server on port `3325` that receives links from the extension and starts downloading instantly.
+
+**Download / install:** [shabdiz-browser-extension](https://github.com/amiof/shabdiz-browser-extension)
 
 ## 🏗️ Tech Stack
 
@@ -78,8 +85,8 @@ Before you begin, ensure you have the following installed:
 - in windows may be install Microsoft Visual C++ Redistributable
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/amiof/electron-project.git
-   cd electron-project
+   git clone https://github.com/amiof/shabdiz-download-manager.git
+   cd shabdiz-download-manager
    ```
 
 2. **Install root dependencies**
@@ -173,7 +180,7 @@ The packaged applications will be in the `release` folder.
 ## 📁 Project Structure
 
 ```
-electron-project/
+shabdiz-download-manager/
 ├── assets/                    # Application icons and images
 ├── electron/                  # Electron main process
 │   ├── src/
