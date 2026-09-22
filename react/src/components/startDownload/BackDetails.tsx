@@ -9,7 +9,8 @@ import StopIcon from "@mui/icons-material/Stop"
 import { SpeedDial, SpeedDialAction, SpeedDialIcon, Tooltip } from "@mui/material"
 import MagnetIcon from "@src/assets/MagnetIcon.tsx"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
-import { TtellRes } from "@src/types.ts"
+import { STATUS_TYPE, TtellRes } from "@src/types.ts"
+import { toFiniteNumber } from "@src/utils.ts"
 import { ReactElement, useEffect, useState } from "react"
 import { ProgressBar } from "react-progressbar-fancy"
 import styles from "./style.module.scss"
@@ -19,6 +20,7 @@ import Typography from "@mui/material/Typography"
 type Props = {
   details: TDetails[]
   downloadStatus: TtellRes | null
+  savePath: string
   isMetaData: boolean
   isTorrent: boolean
   gid: string
@@ -29,7 +31,7 @@ type actionButton = {
   action?: () => void
 }
 const BackDetails = (props: Props) => {
-  const { details, downloadStatus, isTorrent, isMetaData, gid } = props
+  const { details, downloadStatus, savePath, isTorrent, isMetaData, gid } = props
 
   const closePopup = window.electronAPI.closePopupWindow
   const getAllDownloads = useDownloaderStore((state) => state.getAllDownloadsRow)
@@ -40,7 +42,7 @@ const BackDetails = (props: Props) => {
   const delecteAction = async () => {
     window.electronAPI.removeSelectedDownloads([gid])
     const tellStatus = await window.electronAPI.getTellStatus(gid)
-    setDownloadDataToElectron(tellStatus)
+    if (tellStatus) setDownloadDataToElectron(tellStatus)
     closePopup(gid)
   }
 
@@ -50,8 +52,13 @@ const BackDetails = (props: Props) => {
     }, 300)
   }, [])
 
-  const totalLength = Number(downloadStatus?.totalLength ?? 0)
-  const completedLength = Number(downloadStatus?.completedLength ?? 0)
+  const totalLength = toFiniteNumber(downloadStatus?.totalLength)
+  const completedLength = toFiniteNumber(downloadStatus?.completedLength)
+
+  const isComplete = downloadStatus?.status === STATUS_TYPE.COMPLETE
+  const numSeeders = toFiniteNumber(downloadStatus?.numSeeders)
+  // Show the magnet state once seeders are actually known or the torrent is done.
+  const hasSeeders = numSeeders > 0 || isComplete
 
   const percentage =
     !isMetaData && totalLength > 0
@@ -91,7 +98,9 @@ const BackDetails = (props: Props) => {
       title: "Close"
     },
     {
-      action: () => window.electronAPI.openFolder(String(details[2].value)),
+      action: () => {
+        if (savePath) window.electronAPI.openFolder(savePath)
+      },
       Icon: <FolderIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
       title: "open"
     }
@@ -110,7 +119,7 @@ const BackDetails = (props: Props) => {
               {isTorrent && (
                 <>
                   {
-                    downloadStatus?.numSeeders !== "0" || downloadStatus.status == "complete" ?
+                    hasSeeders ?
                       <div
                         className={"absolute bottom-2 right-3 animate-pulse border p-1 pl-2 rounded-xl border-white/10  bg-white/5 backdrop-blur-lg flex flex-col items-center justify-center "}>
                         <MagnetIcon style={{ fontSize: "46px" }} />

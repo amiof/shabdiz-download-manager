@@ -10,7 +10,7 @@ import SpeedIcon from "@mui/icons-material/Speed"
 import TaskAltIcon from "@mui/icons-material/TaskAlt"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { TtellRes } from "@src/types.ts"
-import { formatBytes, formatTime, isMetadataPhase, isTorrentMode } from "@src/utils.ts"
+import { formatBytes, formatTime, isMetadataPhase, isTorrentMode, toFiniteNumber } from "@src/utils.ts"
 import clsx from "clsx"
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
@@ -33,21 +33,25 @@ const DownloadStart = () => {
   const [filename, setFilename] = useState<string | undefined>(undefined)
 
   useEffect(() => {
-    const getFileName = async () => {
-      if (!gid) return
+    if (!gid) return
 
-      // First prefer filename from URL
-      if (name && !filename) {
-        setFilename(name)
-        return
-      }
-      // Otherwise get it from aria2/download options
-      const file = await window.electronAPI.getDownloadOptions(gid)
-
-      setFilename(file?.out ?? "")
+    // First prefer filename from URL
+    if (name) {
+      setFilename(name)
+      return
     }
-    getFileName()
-  }, [gid, fileName])
+
+    // Otherwise get it from aria2/download options
+    let cancelled = false
+    ;(async () => {
+      const file = await window.electronAPI.getDownloadOptions(gid)
+      if (!cancelled) setFilename(file?.out ?? "")
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [gid, name])
 
   const getAllDownloads = useDownloaderStore((state) => state.getAllDownloadsRow)
   const tellActive = useDownloaderStore((state) => state.tellActive)
@@ -60,11 +64,15 @@ const DownloadStart = () => {
   const changeStatusDownload = window.electronAPI.updateDownloadRowStatus
   const currentDownloadRow = tellActive.find((downloadRow) => downloadRow.gid === gid)
 
-  const remainingBytes = downloadStatus ? +downloadStatus.totalLength - Number(downloadStatus.completedLength) : 0
-  const remainingSeconds =
-    downloadStatus && +downloadStatus.downloadSpeed > 0
-      ? remainingBytes / Number(downloadStatus?.downloadSpeed)
-      : Infinity
+  const totalLength = toFiniteNumber(downloadStatus?.totalLength)
+  const completedLength = toFiniteNumber(downloadStatus?.completedLength)
+  const downloadSpeed = toFiniteNumber(downloadStatus?.downloadSpeed)
+
+  // Size is unknown until aria2 reports a positive totalLength (e.g. while
+  // fetching torrent metadata), so don't derive an ETA from it yet.
+  const hasKnownSize = totalLength > 0
+  const remainingBytes = hasKnownSize ? Math.max(0, totalLength - completedLength) : 0
+  const remainingSeconds = hasKnownSize && downloadSpeed > 0 ? remainingBytes / downloadSpeed : Infinity
 
   // const completeDownload = downloadStatus?.status === STATUS_TYPE.COMPLETE
   const getDownloadedFilesDetails = useDownloaderStore((state) => state.getDownloadedFilesDetails)
@@ -83,35 +91,59 @@ const DownloadStart = () => {
   }, [tellActive.length])
 
   useEffect(() => {
-    let interval: ReturnType<typeof setTimeout> | null
-    if (tellActive.length) {
-      interval = setInterval(async () => {
+    if (!gid) return
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const poll = async () => {
+      try {
         const tellStatus = await window.electronAPI.getTellStatus(gid)
-        await getTellActive()
+        // A failed/empty response must not wipe the last good status.
+        if (cancelled || !tellStatus) return
         setDownloadStatus(tellStatus)
-      }, 400)
+      } catch (error) {
+        console.error("Failed to poll download status:", error)
+      }
+    }
+
+    if (tellActive.length) {
+      // Recursive timeout instead of setInterval: a slow request can no longer
+      // overlap the next one or let a stale response overwrite a newer one.
+      const scheduleNext = () => {
+        timer = setTimeout(async () => {
+          await poll()
+          await getTellActive()
+          if (!cancelled) scheduleNext()
+        }, 400)
+      }
+      scheduleNext()
 
       setDownloadDataToElectron(tellActive[0])
     } else {
-      ;(async () => {
-        const tellStatus = await window.electronAPI.getTellStatus(gid)
-        setDownloadStatus(tellStatus)
-      })()
+      poll()
       getAllDownloads()
     }
     return () => {
-      if (interval) {
-        clearInterval(interval)
-        interval = null
+      cancelled = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
         setDownloadStatus(null)
       }
       //for update status in db when closed popup
       ;(async () => {
-        const tellStatus = await window.electronAPI.getTellStatus(gid)
-        await changeStatusDownload(tellStatus.gid, tellStatus)
+        try {
+          const tellStatus = await window.electronAPI.getTellStatus(gid)
+          if (tellStatus?.gid) {
+            await changeStatusDownload(tellStatus.gid, tellStatus)
+          }
+        } catch (error) {
+          console.error("Failed to persist download status:", error)
+        }
       })()
     }
-  }, [tellActive.length])
+  }, [gid, tellActive.length])
 
   const isMetaData = downloadStatus ? isMetadataPhase(downloadStatus) : true
   const isTorrent = downloadStatus ? isTorrentMode(downloadStatus) : false
@@ -136,13 +168,14 @@ const DownloadStart = () => {
   const details: TDetails[] = [
     {
       label: "Speed : ",
-      value: downloadStatus ? formatBytes(+downloadStatus.downloadSpeed, 1) : 0,
+      // formatBytes renders "—" whenever speed is not reported yet.
+      value: formatBytes(downloadStatus?.downloadSpeed, 1),
       icon: <SpeedIcon color={"success"} />,
       showDetails: true
     },
     {
       label: "Link : ",
-      value: downloadStatus?.files[0].uris[0]?.uri ?? "",
+      value: downloadStatus?.files?.[0]?.uris?.[0]?.uri ?? "",
       icon: <InsertLinkIcon color={"success"} />,
       showDetails: !isTorrent
     },
@@ -166,19 +199,20 @@ const DownloadStart = () => {
     },
     {
       label: "File Size:",
-      value: downloadStatus ? formatBytes(+downloadStatus?.totalLength) : 0,
+      // Unknown until aria2 reports a positive totalLength (e.g. metadata phase).
+      value: hasKnownSize ? formatBytes(totalLength) : "—",
       icon: <SaveAsIcon color={"success"} />,
       showDetails: true
     },
     {
       label: "Downloaded Size:",
-      value: downloadStatus ? formatBytes(+downloadStatus?.completedLength) : 0,
+      value: formatBytes(completedLength),
       icon: <SaveAltIcon color={"success"} />,
       showDetails: true
     },
     {
       label: "Eta :",
-      value: formatTime(remainingSeconds),
+      value: hasKnownSize ? formatTime(remainingSeconds) : "—",
       icon: <AccessTimeIcon color={"success"} />,
       showDetails: true
     },
@@ -209,6 +243,7 @@ const DownloadStart = () => {
                 gid={gid}
                 details={details}
                 downloadStatus={downloadStatus}
+                savePath={downloadStatus?.dir ?? ""}
                 isMetaData={isMetaData}
                 isTorrent={isTorrent}
               />
