@@ -3,7 +3,7 @@
 import { DataGrid, GridColDef, GridRowSelectionModel } from "@mui/x-data-grid"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { TDownloads, TtellRes } from "@src/types.ts"
-import { searchInDownloadsRows } from "@src/utils.ts"
+import { formatDateTime, searchInDownloadsRows } from "@src/utils.ts"
 import clsx from "clsx"
 import { MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ProgressBar } from "react-progressbar-fancy"
@@ -231,8 +231,9 @@ const Main = () => {
     },
     {
       field: "CreatedAt",
-      headerName: "Create At",
+      headerName: "Added At",
       width: 150,
+      valueFormatter: (value) => formatDateTime(value),
       sortable: true,
       editable: false
     }
@@ -256,6 +257,13 @@ const Main = () => {
     <div className={styles.container} onContextMenu={(e) => handleContextMenu(e)}>
       <DataGrid
         getRowId={(row) => row.Id!}
+        // rows already arrive sorted newest first, this keeps the header
+        // indicator in sync with what is rendered
+        initialState={{
+          sorting: {
+            sortModel: [{ field: "CreatedAt", sort: "desc" }]
+          }
+        }}
         scrollbarSize={1}
         checkboxSelection
         rowSelectionModel={rowSelectionModel}

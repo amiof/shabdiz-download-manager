@@ -65,3 +65,86 @@ export const isMetadataPhase = (tellStatus: TtellRes): boolean => {
 export const isTorrentMode = (tellStatus: TtellRes) => {
   return "infoHash" in tellStatus
 }
+
+// ---------------------------------------------------------------------------
+// "Added at" registry
+//
+// aria2 does not report when a download was added, and the createdAt column of
+// the DB is reset by the delete-then-insert done in update-downloadRow-status.
+// So the renderer stamps every gid the first time it sees it and persists that
+// map, which gives the data grid a stable timestamp to sort by (newest first).
+// ---------------------------------------------------------------------------
+const ADDED_AT_STORAGE_KEY = "shabdiz-download-added-at"
+const ADDED_AT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+let addedAtRegistry: Record<string, number> | null = null
+let addedAtRegistryDirty = false
+
+const readAddedAtRegistry = (): Record<string, number> => {
+  if (addedAtRegistry) return addedAtRegistry
+
+  let registry: Record<string, number> = {}
+
+  try {
+    const stored = window.localStorage.getItem(ADDED_AT_STORAGE_KEY)
+    const parsed = stored ? JSON.parse(stored) : null
+
+    registry = parsed && typeof parsed === "object" ? { ...parsed } : {}
+  } catch (error) {
+    // storage unavailable or corrupt: keep working in memory only
+    console.log(error)
+  }
+
+  addedAtRegistry = registry
+
+  return registry
+}
+
+// returns the stored "added at" for a gid and stamps it on first sight
+export const getAddedAt = (gid: string | undefined, seedTimestamp: number): number => {
+  if (!gid) return seedTimestamp
+
+  const registry = readAddedAtRegistry()
+  const known = registry[gid]
+
+  if (Number.isFinite(known)) return known
+
+  registry[gid] = seedTimestamp
+  addedAtRegistryDirty = true
+
+  return seedTimestamp
+}
+
+// persisted only when a new gid was stamped, so the 900ms poll stays cheap
+export const saveAddedAtRegistry = () => {
+  if (!addedAtRegistryDirty || !addedAtRegistry) return
+
+  // keep the map bounded: old entries are only needed while the row can still
+  // be listed. Never prune by gid presence, a transient aria2 failure empties
+  // tellActive/tellStopped and would re-stamp (and so re-order) every row.
+  const oldestKept = Date.now() - ADDED_AT_MAX_AGE_MS
+
+  for (const gid of Object.keys(addedAtRegistry)) {
+    if (!(addedAtRegistry[gid] > oldestKept)) {
+      delete addedAtRegistry[gid]
+    }
+  }
+
+  addedAtRegistryDirty = false
+
+  try {
+    window.localStorage.setItem(ADDED_AT_STORAGE_KEY, JSON.stringify(addedAtRegistry))
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+export const formatDateTime = (value?: Date | number | string | null): string => {
+  if (value === undefined || value === null) return "—"
+
+  const date = value instanceof Date ? value : new Date(value)
+
+  if (Number.isNaN(date.getTime())) return "—"
+
+  return date.toLocaleString()
+}

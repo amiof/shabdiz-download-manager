@@ -1,11 +1,18 @@
 import { TDownloads, TFileDetails, TtellRes } from "@src/types.ts"
-import { formatBytes, getFileName, isTorrentMode } from "@src/utils.ts"
+import { formatBytes, getAddedAt, getFileName, isTorrentMode, saveAddedAtRegistry } from "@src/utils.ts"
 import * as _ from "lodash"
 import { StoreApi } from "zustand"
 import { TDownloaderActions, TDownloaderStore } from "./storeType"
 
 export type SetState = StoreApi<TDownloaderStore>["setState"]
 export type GetState = StoreApi<TDownloaderStore>["getState"]
+
+// The first poll of a session can only see downloads that were already there
+// before the app started. There is no reliable "added at" for those, so they
+// are stamped backwards in the order they are currently shown (keeping the
+// existing order). Every gid seen for the first time after that pass is really
+// a new download. See getAddedAt in utils.ts.
+let didSeedAddedAtRegistry = false
 
 export const downloaderAction = (set: SetState, get: GetState): TDownloaderActions => ({
   getFiles: (file: string) => {
@@ -46,18 +53,21 @@ export const downloaderAction = (set: SetState, get: GetState): TDownloaderActio
       }
     }
 
-    const downloadedFilesDetails = get().downloadedFilesDetails
-
     const downloads = [...filteredCompletedStop, ...tellWaiting, ...tellActive, ...completedRowsFromDB]
 
+    const now = Date.now()
 
-    const downloadsRows: TDownloads[] = await Promise.all(
+    // on the first pass of a session, unseen rows are stamped backwards so they
+    // keep the relative order they are shown in today
+    const getAddedAtTimestamp = (gid: string | undefined, index: number) =>
+      getAddedAt(gid, didSeedAddedAtRegistry ? now : now - (downloads.length - index))
+
+    // Id is assigned after sorting so it always counts 1..n top down
+    const rowsWithoutId: Omit<TDownloads, "Id">[] = await Promise.all(
       downloads.map(async (download, index) => {
-        const fileName = getFileName(download.files[0].path)
-
-        const fileCreateAte = downloadedFilesDetails?.[fileName]?.createdAt
-          ? downloadedFilesDetails[fileName].createdAt
-          : new Date()
+        // files can be missing while a torrent is still fetching metadata
+        const firstFile = download.files?.[0]
+        const fileName = getFileName(firstFile?.path ?? "")
 
         const getTorrentFolderName = (filePath: string) => {
           const parts = filePath.split("/");
@@ -72,12 +82,11 @@ export const downloaderAction = (set: SetState, get: GetState): TDownloaderActio
           download.status === "complete" ? fileName : await get().getFilenameFromOption(download.gid)
 
         return {
-          Id: index + 1,
-          FileName:download.infoHash? getTorrentFolderName(download.files[0].path) : optionFileName ,
-          Url: download.infoHash? "Torrent" :download?.files[0]?.uris[0]?.uri,
+          FileName: download.infoHash ? getTorrentFolderName(firstFile?.path ?? "") : optionFileName,
+          Url: download.infoHash ? "Torrent" : (download?.files?.[0]?.uris?.[0]?.uri ?? ""),
           SavePath: download?.dir,
           Size: formatBytes(+download.totalLength),
-          CreatedAt: fileCreateAte,
+          CreatedAt: new Date(getAddedAtTimestamp(download.gid, index)),
           CompletedSize: formatBytes(+download.completedLength),
           Percentage: isNaN(+download.completedLength / +download.totalLength)
             ? 0
@@ -90,6 +99,22 @@ export const downloaderAction = (set: SetState, get: GetState): TDownloaderActio
         }
       })
     )
+
+    saveAddedAtRegistry()
+    didSeedAddedAtRegistry = true
+
+    // newest added first, so the row just added always sits at the top
+    const downloadsRows: TDownloads[] = rowsWithoutId
+      .sort((a, b) => {
+        const aTime = a.CreatedAt?.getTime() ?? 0
+        const bTime = b.CreatedAt?.getTime() ?? 0
+
+        if (bTime !== aTime) return bTime - aTime
+
+        // deterministic order for rows stamped in the same millisecond
+        return (a.Gid ?? "").localeCompare(b.Gid ?? "")
+      })
+      .map((row, index) => ({ ...row, Id: index + 1 }))
 
     set({ allDownloadsRow: downloadsRows })
 
