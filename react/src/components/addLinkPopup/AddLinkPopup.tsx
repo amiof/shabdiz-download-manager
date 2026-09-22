@@ -23,6 +23,11 @@ type TSwitchToTorrentLink = {
   isTorrent: boolean,
   linkAddress: string,
 }
+
+type TlinkOptions={
+  headerObject : Record<string,string>,
+}
+
 const AddLinkPopup = () => {
   const closePopupWindow = window.electronAPI.closePopupWindow
   const addDownloadDir = window.electronAPI.addDownloadDir
@@ -36,10 +41,12 @@ const AddLinkPopup = () => {
 
   const [clipboardLink, setClipboardLink] = useState("")
 
-  const { id, urlLink } = useParams()
+  const { id, urlLink, linkOptions } = useParams()
+
 
   const link = urlLink?.replace(/^:/, "") ?? ""
   const winId = id?.replace(/^:/, "") ?? ""
+  const headerOptions = linkOptions?.replace(/^:/, "") ?? ""
 
 
   const linkAddressStore = useAddLinkStore((state) => state.linkAddressStore)
@@ -48,6 +55,19 @@ const AddLinkPopup = () => {
   const proxyConfigs = useAddLinkStore((state) => state.proxyConfig)
   const options = useAddLinkStore((state) => state.options)
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
+
+
+  // change header send from browser extension
+  const setOptionItem = useAddLinkStore((state) => state.setOptionsItem)
+  const optionsParsed:TlinkOptions|null =headerOptions ? JSON.parse(headerOptions) : null
+
+  useEffect(() => {
+    if(optionsParsed?.headerObject){
+      setOptionItem("header",JSON.stringify(optionsParsed?.headerObject))
+    }
+  }, [])
+
+
 
   // Detect clipboard content once on mount
   useEffect(() => {
@@ -239,6 +259,7 @@ const AddLinkPopup = () => {
     closePopupWindow(winId)
 
   }
+
 
   const changeComponents = () => {
     switch (value) {

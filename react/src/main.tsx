@@ -23,7 +23,7 @@ createRoot(document.getElementById("root")!).render(
       <HashRouter>
         <Routes>
           <Route path="/" element={<App />} />
-          <Route path="/popup/:id/:urlLink" element={<AddLinkPopup />} />
+          <Route path="/popup/:id/:urlLink/:linkOptions" element={<AddLinkPopup />} />
           <Route path="/downloadStart/:id/:fileName" element={<DownloadStart />} />
           <Route path="options/:id" element={<OptionsPopup />} />
           <Route path="scheduler/:id" element={<SchedulerPopup />} />

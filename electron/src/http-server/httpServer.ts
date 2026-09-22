@@ -26,16 +26,16 @@ export const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const data = JSON.parse(body)
+        const linkOptions=JSON.stringify({headerObject:data.headersObject})
 
         const id = generateId()
         createPopupWindow({
           windowTitle: "addLink",
           height: 600,
           width: 650,
-          hashRoute: `popup/${id}/${encodeURIComponent(data.url)}`,
+          hashRoute: `popup/${id}/${encodeURIComponent(data.url)}/${encodeURIComponent(linkOptions)}`,
           windowId: id
         })
-        console.log("Download request:", data)
 
         // Add download to your Shabdiz queue here
         // scheduler.add(data)

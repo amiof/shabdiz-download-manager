@@ -1,9 +1,9 @@
-import { Autocomplete, IconButton, InputAdornment, TextField } from "@mui/material"
-import FolderOpenIcon from "@mui/icons-material/FolderOpen"
-import ClearIcon from "@mui/icons-material/Clear"
-import { useEffect, useState } from "react"
 import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import { TAddLinkOptions } from "@components/addLinkPopup/store/addLinkStoreType.ts"
+import ClearIcon from "@mui/icons-material/Clear"
+import FolderOpenIcon from "@mui/icons-material/FolderOpen"
+import { Autocomplete, IconButton, InputAdornment, TextField } from "@mui/material"
+import { useEffect, useState } from "react"
 
 const USER_AGENT_PRESETS = [
   {
@@ -52,7 +52,6 @@ const AddLinkOptions = () => {
 
     setOptionItem(field, value)
   }
-
   const handleUserAgentChange = (_event: React.SyntheticEvent, value: string) => {
     setFormValues((prev) => ({
       ...prev,

@@ -27,12 +27,15 @@ const ipcDownloadHandler = () => {
           if (proxyPassword) proxyArgs["all-proxy-passwd"] = proxyPassword
         }
       }
-
       const optionsConfig = {} as any
       if (options) {
         const { referrer, header, cookie, userAgent } = options
+
+        const aria2Headers = header && Object.entries(JSON.parse(header)).map(
+          ([key, value]) => `${key}: ${(value as string).trim()}`
+        )
         if (referrer) optionsConfig["referer"] = referrer
-        if (header) optionsConfig["header"] = header
+        if (header) optionsConfig["header"] = aria2Headers
         if (cookie) optionsConfig["load-cookies"] = cookie
         if (userAgent) optionsConfig["user-agent"] = userAgent
       }

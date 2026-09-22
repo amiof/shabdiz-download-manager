@@ -6,7 +6,7 @@ import IpcMainInvokeEvent = Electron.IpcMainInvokeEvent
 const ipcPopupHandler = () => {
   ipcMain.on(POPUP_CHANNELS.ADD_LINK_POPUP, (_: IpcMainEvent, id,url) => {
     const urlLink=url? url : ""
-    createPopupWindow({ windowTitle: "addLink", height: 600, width: 650, hashRoute: `popup/:${id}/:${urlLink}`, windowId: id })
+    createPopupWindow({ windowTitle: "addLink", height: 600, width: 650, hashRoute: `popup/:${id}/:${urlLink}/:""`, windowId: id })
   })
 
   ipcMain.handle(POPUP_CHANNELS.POPUP_START_DOWNLOAD, (event: IpcMainInvokeEvent, id, windowTitle) => {

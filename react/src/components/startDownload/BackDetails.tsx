@@ -50,11 +50,19 @@ const BackDetails = (props: Props) => {
     }, 300)
   }, [])
 
-  const percentage = !isMetaData
-    ? downloadStatus
-      ? +((+downloadStatus?.completedLength / +downloadStatus?.totalLength) * 100).toFixed(0)
+  const totalLength = Number(downloadStatus?.totalLength ?? 0)
+  const completedLength = Number(downloadStatus?.completedLength ?? 0)
+
+  const percentage =
+    !isMetaData && totalLength > 0
+      ? Math.min(
+        100,
+        Math.max(
+          0,
+          Number(((completedLength / totalLength) * 100).toFixed(0))
+        )
+      )
       : 0
-    : 0
 
   const actionButtonData: actionButton[] = [
     {
