@@ -19,6 +19,7 @@ const AddLinkTab = (props: Props) => {
   const setLinkAddressStore = useAddLinkStore((state) => state.setLinkAddressStore)
   const setFileNameStore = useAddLinkStore((state) => state.setFileNameStore)
   const setSavePathStore = useAddLinkStore((state) => state.setSavePathStore)
+  const optionsStore = useAddLinkStore((state) => state.options)
 
 
   const [linkAddress, setLinkAddress] = useState<string>(initialLink || linkAddressStore)
@@ -52,7 +53,8 @@ const AddLinkTab = (props: Props) => {
 
     if (linkAddress) {
       ;(async () => {
-        const resMetadata = await window.electronAPI.getMetadataUrls(linkAddress)
+        const header = optionsStore?.header?? null
+        const resMetadata =header? await window.electronAPI.getMetadataUrls(linkAddress,header):await window.electronAPI.getMetadataUrls(linkAddress)
         if (selectedDownloadPath) {
           setMetadataUrl({ ...resMetadata, savePath: selectedDownloadPath })
         }

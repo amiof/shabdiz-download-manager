@@ -75,7 +75,7 @@ export interface IElectronAPI {
   showNotification: (notif: TNotificationDetailes) => Promise<void>
   getTorrentConfig: () => Promise<TTorrentConfig>
   setTorrentConfig: (config: TTorrentConfig) => Promise<unknown>
-  getMetadataUrls: (url: string) => Promise<resMetadataUrls>
+  getMetadataUrls: (url: string,customHeader?:string) => Promise<resMetadataUrls>
   getMagnetMetadataUrls: (magnetUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>,
   getTorrentMetadataFile: (torrentPath: string) => Promise<resMetadataUrls>,

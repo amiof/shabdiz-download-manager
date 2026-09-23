@@ -68,7 +68,7 @@ interface ElectronAPI {
   showNotification: (notif: TNotificationDetailes) => Promise<void>
   getTorrentConfig: () => Promise<TTorrentConfig>
   setTorrentConfig: (config: TTorrentConfig) => Promise<unknown>
-  getMetadataUrls: (url: string) => Promise<unknown>
+  getMetadataUrls: (url: string,customHeader?:string) => Promise<unknown>
   getMagnetMetadataUrls: (magnetUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataFile: (torrentUrl: string) => Promise<resMetadataUrls>
@@ -187,7 +187,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   //utils
   showNotification: (notifDetailes: TNotificationDetailes) => ipcRenderer.invoke("show-notification", notifDetailes),
-  getMetadataUrls: (url: string) => ipcRenderer.invoke("get-metadata-urls", url),
+  getMetadataUrls: (url: string,customHeader?:string) => ipcRenderer.invoke("get-metadata-urls", url,customHeader),
   getMagnetMetadataUrls: (magnetUrl: string) => ipcRenderer.invoke("get-magnet-metadata-urls", magnetUrl),
   getTorrentMetadataUrls: (torrentUrl: string) => ipcRenderer.invoke("get-torrent-metadata-urls", torrentUrl),
   getTorrentMetadataFile: (torrentPath: string) => ipcRenderer.invoke("get-torrent-metadata-file", torrentPath),

@@ -240,7 +240,7 @@ export const ipcUtilsHandler = () => {
     return urlResponse
   })
 
-  ipcMain.handle(UTILS_CHANNELS.GET_METADATA_URLS, async (_event: IpcMainInvokeEvent, url: string) => {
+  ipcMain.handle(UTILS_CHANNELS.GET_METADATA_URLS, async (_event: IpcMainInvokeEvent, url: string,customHeader?:string) => {
     const urlResponse: resMetadataUrls = {
       fileName: null,
       size: null,
@@ -248,9 +248,10 @@ export const ipcUtilsHandler = () => {
       savePath: directionFolder(url),
       resume: null
     }
+    const parseHeader=customHeader? JSON.parse(customHeader):undefined;
     try {
       if (!url.startsWith("magnet:")) {
-        const response = await fetch(url, { method: "HEAD" })
+        const response = await fetch(url, { method: "HEAD",headers: parseHeader });
         const contentType = response.headers.get("content-type") || ""
         const disposition = response.headers.get("Content-Disposition")
         const fileName = extractFilenameFromDisposition(disposition) ?? getFilenameFromUrl(url)
@@ -277,7 +278,7 @@ export const ipcUtilsHandler = () => {
         if (url.startsWith("magnet:")) return
         const response = await fetch(url, {
           method: "GET",
-          headers: { Range: "bytes=0-0" } // get first byte
+          headers: {...parseHeader,Range: "bytes=0-0" } // get first byte
         })
         const contentLength2 = response.headers.get("Content-Range")?.split("/")[1]
         const disposition = response.headers.get("Content-Disposition")
