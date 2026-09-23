@@ -26,6 +26,7 @@ export const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const data = JSON.parse(body)
+        const url=data.finalUrl ?? data.url
         const linkOptions=JSON.stringify({headerObject:data.headersObject})
 
         const id = generateId()
@@ -33,7 +34,7 @@ export const server = http.createServer((req, res) => {
           windowTitle: "addLink",
           height: 600,
           width: 650,
-          hashRoute: `popup/${id}/${encodeURIComponent(data.url)}/${encodeURIComponent(linkOptions)}`,
+          hashRoute: `popup/${id}/${encodeURIComponent(url)}/${encodeURIComponent(linkOptions)}`,
           windowId: id
         })
 
