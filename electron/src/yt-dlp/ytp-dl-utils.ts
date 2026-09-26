@@ -11,7 +11,6 @@ export const checkSystemPlatform = () => {
         return "macOS"
         break
       case "linux":
-        // must install aria2 by user
         return "linux"
         break
       default:
