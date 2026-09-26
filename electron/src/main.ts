@@ -16,6 +16,7 @@ import ipcShareHandler from "./ipc/sahre/shareHandler"
 import { ipcSchedulerHandler } from "./ipc/scheduler/scheduler"
 import { ipcUtilsHandler } from "./ipc/utils/utils"
 import { SchedulerProcess } from "./schedulerProcess/schedulerProcess"
+import YtDlp from "./yt-dlp/yt-dlp"
 
 export let mainWindow: BrowserWindow | null
 
@@ -175,6 +176,9 @@ app.on("before-quit", async (event) => {
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`Shabdiz API running on http://127.0.0.1:${PORT}`)
 })
+
+const ytDlp = new YtDlp()
+ytDlp.getLastInfo()
 
 // IPC handlers
 ipcDownloadHandler()
