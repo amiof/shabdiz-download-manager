@@ -76,6 +76,15 @@ export const UTILS_CHANNELS = {
   CONTEXT_MENU_ACTION: "context-menu-action",
   READ_CLIPBOARD: "read-clipboard"
 }
+export const YT_DLP_CHANNELS = {
+  GET_STATUS: "get-yt-dlp-status",
+  DOWNLOAD: "download-yt-dlp",
+  GET_MEDIA_INFO: "get-yt-dlp-media-info",
+  START_DOWNLOAD: "start-yt-dlp-download",
+  GET_DOWNLOAD_STATUS: "get-yt-dlp-download-status",
+  CANCEL_DOWNLOAD: "cancel-yt-dlp-download"
+}
+
 export const SCHEDULE_CHANNELS = {
   GET_SCHEDULER_DOWNLOAD_ROWS: "get-scheduler-download-rows",
   ADD_ROWS_TO_SCHEDULER_QUEUE: "add-rows-to-scheduler-queue",

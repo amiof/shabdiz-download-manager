@@ -1,0 +1,72 @@
+import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
+import Alert from "@mui/material/Alert"
+import CircularProgress from "@mui/material/CircularProgress"
+import IconButton from "@mui/material/IconButton"
+import Paper from "@mui/material/Paper"
+import TextField from "@mui/material/TextField"
+import Tooltip from "@mui/material/Tooltip"
+import Typography from "@mui/material/Typography"
+
+const YoutubeSourceForm = () => {
+  const url = useYoutubeTabStore((state) => state.url)
+  const status = useYoutubeTabStore((state) => state.status)
+  const fetching = useYoutubeTabStore((state) => state.fetching)
+  const error = useYoutubeTabStore((state) => state.error)
+  const setUrl = useYoutubeTabStore((state) => state.setUrl)
+  const fetchMediaInfo = useYoutubeTabStore((state) => state.fetchMediaInfo)
+
+  return (
+    <div className={"w-full h-full px-10 py-5 flex flex-col gap-4 overflow-auto"}>
+      <div className={"flex items-center gap-2"}>
+        <TextField
+          color={"success"}
+          size={"small"}
+          fullWidth
+          value={url}
+          label={"YouTube link"}
+          placeholder={"https://www.youtube.com/watch?v=..."}
+          onChange={(event) => setUrl(event.target.value)}
+        />
+        <Tooltip title={"Fetch media information"}>
+          <span>
+            <IconButton color={"success"} onClick={() => void fetchMediaInfo()} disabled={!url.trim() || fetching}>
+              {fetching ? <CircularProgress size={22} color={"inherit"} /> : <DownloadOutlinedIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      </div>
+
+      {error && <Alert severity={"error"}>{error}</Alert>}
+
+      {status?.state === "installed" && (
+        <Paper variant={"outlined"} className={"px-4 py-2"} sx={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+          <Typography variant={"subtitle2"} sx={{ mb: 1.5 }}>
+            yt-dlp
+          </Typography>
+          <div className={"grid grid-cols-[auto_1fr] gap-x-5 gap-y-2"}>
+            <Typography variant={"caption"} color={"text.secondary"}>
+              Version
+            </Typography>
+            <Typography variant={"body2"} className={"truncate"}>
+              {status.version || "unknown"}
+            </Typography>
+            <Typography variant={"caption"} color={"text.secondary"}>
+              Executable
+            </Typography>
+            <Typography variant={"body2"} className={"break-all truncate"}>
+              {status.executablePath}
+            </Typography>
+          </div>
+          {!status.ffmpegAvailable && (
+            <Typography variant={"caption"} color={"warning.main"} className={"block mt-2"}>
+              ffmpeg was not found, video and audio can only be merged when ffmpeg is installed.
+            </Typography>
+          )}
+        </Paper>
+      )}
+    </div>
+  )
+}
+
+export default YoutubeSourceForm

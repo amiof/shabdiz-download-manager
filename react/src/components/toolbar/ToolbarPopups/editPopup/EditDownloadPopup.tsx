@@ -58,7 +58,8 @@ export default function EditDownloadPopup() {
           window.electronAPI.getDownloadInfo(downloadGid)
         ])
 
-        const downloadFileName = stored.FileName || stored.name || aria2Options.out || downloadGid
+        // options are null for rows aria2 does not know (yt-dlp downloads)
+        const downloadFileName = stored.FileName || stored.name || aria2Options?.out || downloadGid
         setDownloadName(downloadFileName)
 
         setGlobalDefaults(aria2Options || {})

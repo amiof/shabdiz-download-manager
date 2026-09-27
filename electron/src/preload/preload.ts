@@ -9,6 +9,13 @@ import {
   TtellRes,
   TTorrentConfig
 } from "../types"
+import {
+  TYtDlpDownloadRequest,
+  TYtDlpDownloadResponse,
+  TYtDlpDownloadStatus,
+  TYtDlpMediaInfoResponse,
+  TYtDlpStatus
+} from "../yt-dlp/type"
 
 interface Aria2cResponse {
   jsonrpc: "2.0"
@@ -73,6 +80,21 @@ interface ElectronAPI {
   getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataFile: (torrentUrl: string) => Promise<resMetadataUrls>
   addTorrentUrl: (selectedFile: string, filePath: string) => Promise<string>
+  // yt-dlp
+  getYtDlpStatus: () => Promise<TYtDlpStatus>
+  downloadYtDlp: () => Promise<TYtDlpStatus>
+  getYtDlpMediaInfo: (
+    url: string,
+    options?: TOptionsConfig | null,
+    proxyConfig?: TProxyConfig | null
+  ) => Promise<TYtDlpMediaInfoResponse>
+  startYtDlpDownload: (
+    request: TYtDlpDownloadRequest,
+    options?: TOptionsConfig | null,
+    proxyConfig?: TProxyConfig | null
+  ) => Promise<TYtDlpDownloadResponse>
+  getYtDlpDownloadStatus: (id: string) => Promise<TYtDlpDownloadStatus | null>
+  cancelYtDlpDownload: (id: string) => Promise<boolean>
   showContextMenu: (id: string) => Promise<unknown>
   onContextMenuAction: (callback: (action: string | { action: string; [key: string]: any }) => void) => Promise<any>
   readClipboard: () => Promise<string>
@@ -192,6 +214,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getTorrentMetadataUrls: (torrentUrl: string) => ipcRenderer.invoke("get-torrent-metadata-urls", torrentUrl),
   getTorrentMetadataFile: (torrentPath: string) => ipcRenderer.invoke("get-torrent-metadata-file", torrentPath),
   addTorrentUrl: (selectedFile: string, filePath: string) => ipcRenderer.invoke("add-torrent-url", selectedFile, filePath),
+
+  //yt-dlp
+  getYtDlpStatus: () => ipcRenderer.invoke("get-yt-dlp-status"),
+  downloadYtDlp: () => ipcRenderer.invoke("download-yt-dlp"),
+  getYtDlpMediaInfo: (url: string, options?: TOptionsConfig | null, proxyConfig?: TProxyConfig | null) =>
+    ipcRenderer.invoke("get-yt-dlp-media-info", url, options, proxyConfig),
+  startYtDlpDownload: (
+    request: TYtDlpDownloadRequest,
+    options?: TOptionsConfig | null,
+    proxyConfig?: TProxyConfig | null
+  ) => ipcRenderer.invoke("start-yt-dlp-download", request, options, proxyConfig),
+  getYtDlpDownloadStatus: (id: string) => ipcRenderer.invoke("get-yt-dlp-download-status", id),
+  cancelYtDlpDownload: (id: string) => ipcRenderer.invoke("cancel-yt-dlp-download", id),
 
   showContextMenu: (id: string) => ipcRenderer.invoke("show-context-menu", id),
   onContextMenuAction: (callback: (action: string | { action: string; [key: string]: any }) => void) => {

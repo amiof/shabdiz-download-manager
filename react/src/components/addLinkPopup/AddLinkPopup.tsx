@@ -1,8 +1,12 @@
 import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
+import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
 import AddLinkOptions from "@components/addLinkPopup/tabs/AddLinkOptions.tsx"
 import AddLinkProxy from "@components/addLinkPopup/tabs/AddLinkProxy.tsx"
 import AddLinkTab from "@components/addLinkPopup/tabs/AddLinkTab.tsx"
 import AddTorrentTab from "@components/addLinkPopup/tabs/AddTorrentTab/AddTorrentTab.tsx"
+import AddYoutubeTab from "@components/addLinkPopup/tabs/AddYoutubeTab/AddYoutubeTab.tsx"
+import YoutubeTabFooter from "@components/addLinkPopup/tabs/AddYoutubeTab/YoutubeTabFooter.tsx"
+import { isYoutubeLink } from "@components/addLinkPopup/tabs/AddYoutubeTab/youtubeTabHelpers.ts"
 import { TAddLinkTabs, TTorrentInputType, TTorrentStep } from "@components/addLinkPopup/types.ts"
 import CustomTitleBar from "@components/customTilebar/CustomTitleBar.tsx"
 import { AddLink, Settings, VpnLock } from "@mui/icons-material"
@@ -10,6 +14,7 @@ import AddCircleOutlineOutlinedIcon from "@mui/icons-material/AddCircleOutlineOu
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined"
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
 import NavigateNextOutlinedIcon from "@mui/icons-material/NavigateNextOutlined"
+import YouTubeIcon from "@mui/icons-material/YouTube"
 import { Button, Tab, Tabs } from "@mui/material"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
 import { resMetadataUrls } from "@src/types.ts"
@@ -40,6 +45,7 @@ const AddLinkPopup = () => {
   })
 
   const [clipboardLink, setClipboardLink] = useState("")
+  const [youtubeLink, setYoutubeLink] = useState("")
 
   const { id, urlLink, linkOptions } = useParams()
 
@@ -55,6 +61,7 @@ const AddLinkPopup = () => {
   const proxyConfigs = useAddLinkStore((state) => state.proxyConfig)
   const options = useAddLinkStore((state) => state.options)
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
+  const setYoutubeUrl = useYoutubeTabStore((state) => state.setUrl)
 
 
   // change header send from browser extension
@@ -87,6 +94,11 @@ const AddLinkPopup = () => {
               setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: link })
               return
             }
+            // Youtube link from the browser extension
+            if (isYoutubeLink(link)) {
+              setYoutubeLink(link)
+              return
+            }
             setClipboardLink(link)
           }else {
 
@@ -100,6 +112,11 @@ const AddLinkPopup = () => {
             cleanUrl.search = ""
             if (cleanUrl.toString().endsWith(".torrent")) {
               setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
+              return
+            }
+            // Youtube link in the clipboard
+            if (isYoutubeLink(clipboardContent)) {
+              setYoutubeLink(clipboardContent)
               return
             }
             // Normal link - pass to AddLinkTab
@@ -120,6 +137,14 @@ const AddLinkPopup = () => {
       setValue("Torrent")
     }
   }, [switchToTorrentLink])
+
+  // Switch to YouTube tab once when a youtube link was detected
+  useEffect(() => {
+    if (youtubeLink) {
+      setYoutubeUrl(youtubeLink)
+      setValue("YouTube")
+    }
+  }, [youtubeLink])
 
   const downloadHandler = async () => {
     if (linkAddressStore) {
@@ -269,6 +294,8 @@ const AddLinkPopup = () => {
         return <AddLinkProxy />
       case "Options":
         return <AddLinkOptions />
+      case "YouTube":
+        return <AddYoutubeTab />
       case "Torrent":
         return (
           <AddTorrentTab
@@ -314,6 +341,7 @@ const AddLinkPopup = () => {
           <Tabs orientation={"horizontal"} variant="scrollable" value={value} onChange={handleChange}>
             <Tab label={"Link"} value={"Link"} iconPosition={"start"} icon={<AddLink sx={{ rotate: "120deg" }} />} />
             <Tab label={"Torrent"} value={"Torrent"} iconPosition={"start"} icon={<DownloadOutlinedIcon />} />
+            <Tab label={"YouTube"} value={"YouTube"} iconPosition={"start"} icon={<YouTubeIcon />} />
             <Tab label={"Proxy"} value={"Proxy"} iconPosition={"start"} icon={<VpnLock />} />
             <Tab label={"Options"} value={"Options"} iconPosition={"start"} icon={<Settings />} />
           </Tabs>
@@ -326,7 +354,9 @@ const AddLinkPopup = () => {
           {changeComponents()}
         </div>
         <div className={"flex items-center justify-between w-full px-10 h-[20%]"}>
-          {value === "Torrent" ? (
+          {value === "YouTube" ? (
+            <YoutubeTabFooter />
+          ) : value === "Torrent" ? (
             <div className={"flex gap-2"}>
               {torrentStep === "files" && (
                 <div className={"flex gap-2"}>

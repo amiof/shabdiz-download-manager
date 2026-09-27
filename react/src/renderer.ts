@@ -7,7 +7,12 @@ import {
   TGetGlobalStateResponse,
   TSchedulerConfig,
   TSchedulerGid,
-  TtellRes
+  TtellRes,
+  TYtDlpDownloadRequest,
+  TYtDlpDownloadResponse,
+  TYtDlpDownloadStatus,
+  TYtDlpMediaInfoResponse,
+  TYtDlpStatus
 } from "@src/types.ts"
 
 export interface IElectronAPI {
@@ -80,6 +85,21 @@ export interface IElectronAPI {
   getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>,
   getTorrentMetadataFile: (torrentPath: string) => Promise<resMetadataUrls>,
   addTorrentUrl: (selectedFile: string, filePath: string) => Promise<string>
+  // yt-dlp
+  getYtDlpStatus: () => Promise<TYtDlpStatus>
+  downloadYtDlp: () => Promise<TYtDlpStatus>
+  getYtDlpMediaInfo: (
+    url: string,
+    options?: TAddLinkOptions | null,
+    proxyConfig?: TProxyConfig | null
+  ) => Promise<TYtDlpMediaInfoResponse>
+  startYtDlpDownload: (
+    request: TYtDlpDownloadRequest,
+    options?: TAddLinkOptions | null,
+    proxyConfig?: TProxyConfig | null
+  ) => Promise<TYtDlpDownloadResponse>
+  getYtDlpDownloadStatus: (id: string) => Promise<TYtDlpDownloadStatus | null>
+  cancelYtDlpDownload: (id: string) => Promise<boolean>
   showContextMenu: (selectedItems: [] | TDownloads[]) => Promise<unknown>
   readClipboard: () => Promise<string>
   getSchedulerDownloadRows: () => Promise<TSchedulerGid[]>

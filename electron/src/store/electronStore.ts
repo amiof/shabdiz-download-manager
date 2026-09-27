@@ -10,6 +10,7 @@ interface Schema {
   selectedStorageDirectory: string | null
   torrentConfig: TTorrentConfig
   scheduler: TScheduler
+  ytDlp: { version: string }
 }
 
 //add electron-store for save settings to config.json
@@ -56,6 +57,9 @@ export const electronStore = new Store<Schema>({
       endTime: undefined,
       keepAlive: false,
       powerOff: false
+    },
+    ytDlp: {
+      version: ""
     }
   }
 })

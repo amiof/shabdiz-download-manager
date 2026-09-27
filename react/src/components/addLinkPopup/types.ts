@@ -1,6 +1,10 @@
 import { resMetadataUrls } from "@src/types.ts"
 
-export type TAddLinkTabs = "Options" | "Proxy" | "Link" | "Torrent"
+export type TAddLinkTabs = "Options" | "Proxy" | "Link" | "Torrent" | "YouTube"
+
+// steps of the youtube tab, the flow skips the audio step when the selected
+// video format already contains audio
+export type TYtDlpStep = "checking" | "install" | "url" | "video" | "audio" | "subtitle" | "summary"
 
 export type TTorrentInputType = "Magnet URL" | "Torrent Link" | "Torrent File"
 

@@ -15,6 +15,7 @@ import { ipcEditDownloadHandler } from "./ipc/editDownload/editDownloadHandler"
 import ipcShareHandler from "./ipc/sahre/shareHandler"
 import { ipcSchedulerHandler } from "./ipc/scheduler/scheduler"
 import { ipcUtilsHandler } from "./ipc/utils/utils"
+import { ipcYtDlpHandler } from "./ipc/ytDlp/ytDlpHandler"
 import { SchedulerProcess } from "./schedulerProcess/schedulerProcess"
 import YtDlp from "./yt-dlp/yt-dlp"
 
@@ -99,6 +100,8 @@ app.on("window-all-closed", () => {
 
 export const aria2 = new aria2c()
 
+export const ytDlp = new YtDlp()
+
 export const schedulerInstance = new SchedulerProcess()
 
 app.whenReady().then(() => {
@@ -177,9 +180,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`Shabdiz API running on http://127.0.0.1:${PORT}`)
 })
 
-const ytDlp = new YtDlp()
-ytDlp.getLastInfo()
-
 // IPC handlers
 ipcDownloadHandler()
 ipcGetDataHandler()
@@ -190,3 +190,4 @@ ipcUtilsHandler()
 ipcSchedulerHandler()
 ipcShareHandler()
 ipcEditDownloadHandler()
+ipcYtDlpHandler()

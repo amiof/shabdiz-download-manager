@@ -130,3 +130,99 @@ export type TSchedulerConfig = {
   powerOff: boolean
 }
 
+// yt-dlp ---------------------------------------------------------------
+
+// state of the yt-dlp executable itself (never of a media download)
+export type TYtDlpInstallState = "not-installed" | "downloading" | "installed" | "failed"
+
+export type TYtDlpStatus = {
+  state: TYtDlpInstallState
+  executablePath: string
+  version?: string
+  percent: number
+  speed: string
+  error?: string
+  ffmpegAvailable: boolean
+}
+
+// hasAudio comes from the yt-dlp vcodec/acodec fields, not from the extension
+export type TYtDlpFormat = {
+  format_id: string
+  ext: string
+  vcodec?: string
+  acodec?: string
+  width?: number
+  height?: number
+  fps?: number
+  abr?: number
+  vbr?: number
+  tbr?: number
+  filesize?: number
+  filesize_approx?: number
+  resolution?: string
+  format_note?: string
+  language?: string
+  asr?: number
+  audio_channels?: number
+  hasAudio: boolean
+}
+
+export type TYtDlpSubtitleFormat = {
+  ext: string
+  name?: string
+}
+
+export type TYtDlpSubtitle = {
+  language: string
+  isAutomatic: boolean
+  formats: TYtDlpSubtitleFormat[]
+}
+
+export type TYtDlpMediaInfo = {
+  id: string
+  title: string
+  uploader?: string
+  duration?: number
+  webpageUrl: string
+  videoFormats: TYtDlpFormat[]
+  audioFormats: TYtDlpFormat[]
+  subtitles: TYtDlpSubtitle[]
+}
+
+export type TYtDlpSubtitleSelection = {
+  language: string
+  format: string
+  isAutomatic: boolean
+}
+
+export type TYtDlpDownloadRequest = {
+  url: string
+  videoFormatId: string
+  audioFormatId?: string
+  subtitles: TYtDlpSubtitleSelection[]
+  title?: string
+}
+
+export type TYtDlpDownloadStatus = {
+  id: string
+  status: STATUS_TYPE
+  percent: number
+  completedLength: string
+  totalLength: string
+  downloadSpeed: string
+  eta?: number
+  dir: string
+  filePath?: string
+  title?: string
+  errorMessage?: string
+}
+
+export type TYtDlpMediaInfoResponse = {
+  mediaInfo: TYtDlpMediaInfo | null
+  error: string
+}
+
+export type TYtDlpDownloadResponse = {
+  download: TYtDlpDownloadStatus | null
+  error: string
+}
