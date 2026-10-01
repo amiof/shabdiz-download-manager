@@ -5,6 +5,7 @@
   "main": "./dist/main.js",
   "scripts": {
     "build": "cross-env NODE_ENV=production tsc",
+    "test": "node --test \"test/*.test.ts\"",
     "start2": "cross-env NODE_ENV=development tsc && cross-env NODE_ENV=development electronmon .",
     "start": "concurrently -k \"cross-env NODE_ENV=development tsc --watch\" \" wait-on dist && cross-env NODE_ENV=development electronmon .\""
   },
