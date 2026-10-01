@@ -7,6 +7,7 @@ import {
   parseCookieHeader,
   pickCookieHeader,
   pickCookieHeaderFromOptions,
+  pickHeader,
   ytDlpCookieFileEol
 } from "../src/yt-dlp/yt-dlp-cookie-file.ts"
 
@@ -40,6 +41,16 @@ test("pickCookieHeader finds the cookie header whatever its casing is", () => {
 test("pickCookieHeader reads the header object the extension sends", () => {
   const options = { header: JSON.stringify({ Cookie: "SID=1", "User-Agent": "UA" }) }
   assert.equal(pickCookieHeaderFromOptions(options), "SID=1")
+  assert.equal(pickCookieHeaderFromOptions({ header: "{not json" }), undefined)
+  assert.equal(pickCookieHeaderFromOptions({}), undefined)
+})
+
+test("pickHeader reads any header the extension sends by its lowercased name", () => {
+  const headers = { "User-Agent": "UA", Referer: "https://youtube.com/" }
+  assert.equal(pickHeader(headers, "user-agent"), "UA")
+  assert.equal(pickHeader(headers, "referer"), "https://youtube.com/")
+  assert.equal(pickHeader(headers, "cookie"), undefined)
+  assert.equal(pickHeader(undefined, "cookie"), undefined)
 })
 
 test("buildNetscapeCookieFile renders a yt-dlp readable netscape file", () => {

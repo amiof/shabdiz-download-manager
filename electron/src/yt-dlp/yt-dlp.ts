@@ -1,7 +1,7 @@
 import { ChildProcess, execFile, spawn } from "child_process"
 import { app } from "electron"
 import { constants } from "fs"
-import { access, chmod, mkdir } from "fs/promises"
+import { access, chmod, mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { DataSourceRepo } from "../database/database"
 import { Download } from "../database/entities/download"
@@ -19,6 +19,13 @@ import {
   TYtDlpStatus,
   ytDlpInfoData
 } from "./type"
+import {
+  buildNetscapeCookieFile,
+  cookieAuthHint,
+  isCookieAuthError,
+  parseCookieHeader,
+  pickCookieHeaderFromOptions
+} from "./yt-dlp-cookie-file"
 import {
   buildFormatSelector,
   buildSubtitleArgs,
@@ -48,6 +55,10 @@ export default class YtDlp {
   // the last parsed metadata, so a download request does not have to carry the
   // whole yt-dlp format list back to the main process
   private lastMediaInfo: { url: string; info: TYtDlpMediaInfo } | undefined = undefined
+  // the netscape cookie file written from the browser extension cookie header
+  private cookieFilePath: string | undefined = undefined
+  // the cookie header the file was written from, a later link sends new cookies
+  private cookieFileHeader: string | undefined = undefined
 
   checkVersion() {
     console.log("checkVersion")
@@ -275,11 +286,12 @@ export default class YtDlp {
     const installed = await this.isInstalled()
     if (!installed.installed) throw new Error("yt-dlp is not downloaded yet")
 
+    const cookieFilePath = await this.resolveCookieFile(options)
     const stdout = await this.runYtDlp([
       "-J",
       "--no-playlist",
       "--no-warnings",
-      ...buildYtDlpAuthArgs(options, proxyConfig),
+      ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
       url
     ])
 
@@ -365,6 +377,7 @@ export default class YtDlp {
       title: request.title || mediaInfo.title
     }
 
+    const cookieFilePath = await this.resolveCookieFile(options)
     const args = [
       "--no-playlist",
       "--no-warnings",
@@ -379,7 +392,7 @@ export default class YtDlp {
       "-o",
       path.join(dir, "%(title)s.%(ext)s"),
       ...(audioFormat ? ["--merge-output-format", container] : []),
-      ...buildYtDlpAuthArgs(options, proxyConfig),
+      ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
       request.url
     ]
 
@@ -486,6 +499,8 @@ export default class YtDlp {
     proxyConfig: TProxyConfig | null | undefined,
     dir: string
   ) => {
+    const cookieFilePath = await this.resolveCookieFile(options)
+
     for (const selection of request.subtitles) {
       try {
         await this.runYtDlp([
@@ -494,7 +509,7 @@ export default class YtDlp {
           ...buildSubtitleArgs(selection),
           "-o",
           path.join(dir, "%(title)s.%(ext)s"),
-          ...buildYtDlpAuthArgs(options, proxyConfig),
+          ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
           request.url
         ])
       } catch (error) {
@@ -595,6 +610,31 @@ export default class YtDlp {
     return "installed"
   }
 
+  // the browser extension sends its youtube cookies as a header, yt-dlp only
+  // accepts them as a netscape cookie file, so it is written once and reused
+  private resolveCookieFile = async (options?: TOptionsConfig | null): Promise<string | undefined> => {
+    // a cookie file the user picked in the options tab is never overwritten
+    if (options?.cookie) return undefined
+
+    const cookieHeader = pickCookieHeaderFromOptions(options)
+    if (!cookieHeader) return undefined
+
+    // the header does not change while one link is being set up, so the file is
+    // written once and reused for the metadata, the download and the subtitles
+    if (this.cookieFilePath && this.cookieFileHeader === cookieHeader) return this.cookieFilePath
+
+    const directory = await this.ytDlpCreatePath()
+    const filePath = path.join(directory, "cookies.txt")
+
+    await writeFile(filePath, buildNetscapeCookieFile(parseCookieHeader(cookieHeader), "https://www.youtube.com/"), {
+      encoding: "utf8"
+    })
+
+    this.cookieFilePath = filePath
+    this.cookieFileHeader = cookieHeader
+    return filePath
+  }
+
   private ensureExecutablePermission = async () => {
     if (checkSystemPlatform() === "win") return
 
@@ -631,7 +671,11 @@ export default class YtDlp {
       execFile(this.getExecutablePath(), args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (error) {
           console.error("[yt-dlp] command failed:", error.message, "\n", stderr)
-          reject(new Error(toYtDlpUserError(stderr || error.message)))
+          const detail = stderr || error.message
+          const userError = toYtDlpUserError(detail)
+
+          // the bot check is the one error the user can fix from the popup
+          reject(new Error(isCookieAuthError(detail) ? `${userError} — ${cookieAuthHint()}` : userError))
           return
         }
 

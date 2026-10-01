@@ -9,6 +9,7 @@ import {
   TYtDlpSubtitle,
   TYtDlpSubtitleSelection
 } from "./type"
+import { parseHeaderOption, pickHeader } from "./yt-dlp-cookie-file"
 
 export const checkSystemPlatform = () => {
   try {
@@ -188,23 +189,37 @@ export const parseYtDlpFilePath = (line: string): string | null => {
   return filePath || null
 }
 
-// file options of the add link popup are reused for yt-dlp too
-export const buildYtDlpAuthArgs = (options?: TOptionsConfig | null, proxyConfig?: TProxyConfig | null): string[] => {
+// file options of the add link popup are reused for yt-dlp too. cookieFilePath
+// is the netscape file written from the browser extension cookie header, it wins
+// over the cookie file the user picked in the options tab
+export const buildYtDlpAuthArgs = (
+  options?: TOptionsConfig | null,
+  proxyConfig?: TProxyConfig | null,
+  cookieFilePath?: string
+): string[] => {
   const args: string[] = []
+  const headers = parseHeaderOption(options?.header)
 
-  if (options?.cookie) args.push("--cookies", options.cookie)
-  if (options?.userAgent) args.push("--user-agent", options.userAgent)
-  if (options?.referrer) args.push("--referer", options.referrer)
+  const cookieFile = cookieFilePath ?? options?.cookie
+  if (cookieFile) args.push("--cookies", cookieFile)
 
-  if (options?.header) {
-    try {
-      const headers = JSON.parse(options.header) as Record<string, string>
-      Object.entries(headers).forEach(([key, value]) => {
-        args.push("--add-header", `${key}: ${String(value).trim()}`)
-      })
-    } catch {
-      console.error("Could not parse the header option for yt-dlp")
-    }
+  // the browser extension sends the user agent and the referer as headers, they
+  // keep their own options because yt-dlp only honours those two there
+  const userAgent = options?.userAgent ?? pickHeader(headers, "user-agent")
+  if (userAgent) args.push("--user-agent", userAgent)
+
+  const referrer = options?.referrer ?? pickHeader(headers, "referer")
+  if (referrer) args.push("--referer", referrer)
+
+  if (headers) {
+    Object.entries(headers).forEach(([key, value]) => {
+      // the cookie header only works as a cookie file, and the user agent and
+      // the referer were already turned into their own options above
+      const headerName = key.trim().toLowerCase()
+      if (headerName === "cookie" || headerName === "user-agent" || headerName === "referer") return
+
+      args.push("--add-header", `${key}: ${String(value).trim()}`)
+    })
   }
 
   if (proxyConfig?.proxyStatus && proxyConfig.ip && proxyConfig.port) {

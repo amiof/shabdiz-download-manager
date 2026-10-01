@@ -34,16 +34,25 @@ export const pickCookieHeader = (headers?: Record<string, string> | null): strin
 }
 
 // the add link popup keeps the extension headers as a JSON string in options
-export const pickCookieHeaderFromOptions = (options?: { header?: string } | null): string | undefined => {
-  if (!options?.header) return undefined
+export const parseHeaderOption = (header?: string): Record<string, string> | undefined => {
+  if (!header) return undefined
 
   try {
-    return pickCookieHeader(JSON.parse(options.header) as Record<string, string>)
+    return JSON.parse(header) as Record<string, string>
   } catch {
     console.error("[yt-dlp] Could not parse the header option to read the cookies")
     return undefined
   }
 }
+
+export const pickHeader = (headers: Record<string, string> | undefined, name: string): string | undefined => {
+  const entry = Object.entries(headers ?? {}).find(([key]) => key.trim().toLowerCase() === name)
+  const value = entry?.[1]
+  return value ? String(value).trim() : undefined
+}
+
+export const pickCookieHeaderFromOptions = (options?: { header?: string } | null): string | undefined =>
+  pickHeader(parseHeaderOption(options?.header), "cookie")
 
 // ".youtube.com" for www.youtube.com and youtu.be, so one cookie file works for
 // every youtube host
