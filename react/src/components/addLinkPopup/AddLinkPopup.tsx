@@ -337,7 +337,7 @@ const AddLinkPopup = () => {
           "h-full w-full border-r border-l border-b rounded-xl border-[rgba(255,255,255,0.3)] flex flex-col bg-[radial-gradient(circle_at_15%_10%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_85%_85%,rgba(34,197,94,0.10),transparent_32%),linear-gradient(145deg,#05080d_0%,#0a1019_45%,#0d1420_100%)] "
         }
       >
-        <div className={"w-full px-10"}>
+        <div className={"w-full px-5"}>
           <Tabs orientation={"horizontal"} variant="scrollable" value={value} onChange={handleChange}>
             <Tab label={"Link"} value={"Link"} iconPosition={"start"} icon={<AddLink sx={{ rotate: "120deg" }} />} />
             <Tab label={"Torrent"} value={"Torrent"} iconPosition={"start"} icon={<DownloadOutlinedIcon />} />
