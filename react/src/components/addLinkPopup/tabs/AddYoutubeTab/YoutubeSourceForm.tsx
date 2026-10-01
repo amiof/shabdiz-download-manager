@@ -1,3 +1,4 @@
+import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
 import Alert from "@mui/material/Alert"
@@ -15,6 +16,11 @@ const YoutubeSourceForm = () => {
   const error = useYoutubeTabStore((state) => state.error)
   const setUrl = useYoutubeTabStore((state) => state.setUrl)
   const fetchMediaInfo = useYoutubeTabStore((state) => state.fetchMediaInfo)
+  const options = useAddLinkStore((state) => state.options)
+
+  // yt-dlp can only get cookies from a cookie file, so the youtube tab only
+  // works when the extension header or a picked cookie file reaches it
+  const hasCookieSource = !!options?.cookie || !!options?.header?.toLowerCase().includes("cookie")
 
   return (
     <div className={"w-full h-full px-10 py-5 flex flex-col gap-4 overflow-auto"}>
@@ -38,6 +44,14 @@ const YoutubeSourceForm = () => {
       </div>
 
       {error && <Alert severity={"error"}>{error}</Alert>}
+
+      {!hasCookieSource && (
+        <Alert severity={"warning"}>
+          {
+            "YouTube may ask you to sign in to confirm you are not a bot. Send this link from the Shabdiz browser extension, or pick a cookies.txt file in the Options tab."
+          }
+        </Alert>
+      )}
 
       {status?.state === "installed" && (
         <Paper variant={"outlined"} className={"px-4 py-2"} sx={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
