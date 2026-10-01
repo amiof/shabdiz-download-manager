@@ -3,7 +3,6 @@ import { ytDlp } from "../../main"
 import { TOptionsConfig, TProxyConfig } from "../../types"
 import { TYtDlpDownloadRequest, TYtDlpDownloadResponse, TYtDlpMediaInfoResponse, TYtDlpStatus } from "../../yt-dlp/type"
 import { YT_DLP_CHANNELS } from "../channels"
-
 import IpcMainInvokeEvent = Electron.IpcMainInvokeEvent
 
 const toErrorMessage = (error: unknown): string =>
