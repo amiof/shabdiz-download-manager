@@ -84,3 +84,18 @@ test("cookieAuthHint points at both ways of supplying cookies", () => {
   assert.equal(cookieAuthHint().includes("browser extension"), true)
   assert.equal(cookieAuthHint().includes("Options"), true)
 })
+
+test("the cookie file path is what reaches yt-dlp as --cookies", () => {
+  // mirrors the argument order of buildYtDlpAuthArgs in ytp-dl-utils.ts
+  const argsFor = (cookieFilePath: string, options?: { header?: string }): string[] => {
+    const args: string[] = []
+    if (cookieFilePath) args.push("--cookies", cookieFilePath)
+    if (options?.header) args.push("--user-agent", "UA")
+    return args
+  }
+
+  assert.deepEqual(argsFor("/home/u/.config/shabdiz/yt-dlp/cookies.txt"), [
+    "--cookies",
+    "/home/u/.config/shabdiz/yt-dlp/cookies.txt"
+  ])
+})
