@@ -24,13 +24,13 @@ import { useParams } from "react-router-dom"
 import styles from "./sytle.module.scss"
 
 type TSwitchToTorrentLink = {
-  isMagnet: boolean,
-  isTorrent: boolean,
-  linkAddress: string,
+  isMagnet: boolean
+  isTorrent: boolean
+  linkAddress: string
 }
 
-type TlinkOptions={
-  headerObject : Record<string,string>,
+type TlinkOptions = {
+  headerObject: Record<string, string>
 }
 
 const AddLinkPopup = () => {
@@ -49,11 +49,9 @@ const AddLinkPopup = () => {
 
   const { id, urlLink, linkOptions } = useParams()
 
-
   const link = urlLink?.replace(/^:/, "") ?? ""
   const winId = id?.replace(/^:/, "") ?? ""
   const headerOptions = linkOptions?.replace(/^:/, "") ?? ""
-
 
   const linkAddressStore = useAddLinkStore((state) => state.linkAddressStore)
   const savePathStore = useAddLinkStore((state) => state.savePathStore)
@@ -63,72 +61,63 @@ const AddLinkPopup = () => {
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
   const setYoutubeUrl = useYoutubeTabStore((state) => state.setUrl)
 
-
   // change header send from browser extension
   const setOptionItem = useAddLinkStore((state) => state.setOptionsItem)
-  const optionsParsed:TlinkOptions|null =headerOptions ? JSON.parse(headerOptions) : null
+  const optionsParsed: TlinkOptions | null = headerOptions ? JSON.parse(headerOptions) : null
 
   useEffect(() => {
-    if(optionsParsed?.headerObject){
-      setOptionItem("header",JSON.stringify(optionsParsed?.headerObject))
+    if (optionsParsed?.headerObject) {
+      setOptionItem("header", JSON.stringify(optionsParsed?.headerObject))
     }
   }, [])
 
-
-
   // Detect clipboard content once on mount
   useEffect(() => {
-    (async () => {
-
-        try {
-          // if link from browser send (user installed browser extension)
-          if (link) {
-            if (link.trim().startsWith("magnet:")) {
-              setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: link })
-              return
-
-            }
-            const cleanUrl = new URL(link)
-            cleanUrl.search = ""
-            if (cleanUrl.toString().endsWith(".torrent")) {
-              setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: link })
-              return
-            }
-            // Youtube link from the browser extension
-            if (isYoutubeLink(link)) {
-              setYoutubeLink(link)
-              return
-            }
-            setClipboardLink(link)
-          }else {
-
-            //read from clipboard user yourself  add link
-            const clipboardContent = await window.electronAPI.readClipboard()
-            if (clipboardContent.trim().startsWith("magnet:")) {
-              setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
-              return
-            }
-            const cleanUrl = new URL(clipboardContent)
-            cleanUrl.search = ""
-            if (cleanUrl.toString().endsWith(".torrent")) {
-              setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
-              return
-            }
-            // Youtube link in the clipboard
-            if (isYoutubeLink(clipboardContent)) {
-              setYoutubeLink(clipboardContent)
-              return
-            }
-            // Normal link - pass to AddLinkTab
-            setClipboardLink(clipboardContent)
+    ;(async () => {
+      try {
+        // if link from browser send (user installed browser extension)
+        if (link) {
+          if (link.trim().startsWith("magnet:")) {
+            setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: link })
+            return
           }
+          const cleanUrl = new URL(link)
+          cleanUrl.search = ""
+          if (cleanUrl.toString().endsWith(".torrent")) {
+            setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: link })
+            return
+          }
+          // Youtube link from the browser extension
+          if (isYoutubeLink(link)) {
+            setYoutubeLink(link)
+            return
+          }
+          setClipboardLink(link)
+        } else {
+          //read from clipboard user yourself  add link
+          const clipboardContent = await window.electronAPI.readClipboard()
+          if (clipboardContent.trim().startsWith("magnet:")) {
+            setSwitchToTorrentLink({ isMagnet: true, isTorrent: false, linkAddress: clipboardContent })
+            return
+          }
+          const cleanUrl = new URL(clipboardContent)
+          cleanUrl.search = ""
+          if (cleanUrl.toString().endsWith(".torrent")) {
+            setSwitchToTorrentLink({ isMagnet: false, isTorrent: true, linkAddress: clipboardContent })
+            return
+          }
+          // Youtube link in the clipboard
+          if (isYoutubeLink(clipboardContent)) {
+            setYoutubeLink(clipboardContent)
+            return
+          }
+          // Normal link - pass to AddLinkTab
+          setClipboardLink(clipboardContent)
         }
-        catch {
-          // Clipboard content is not a valid URL, ignore
-        }
+      } catch {
+        // Clipboard content is not a valid URL, ignore
       }
-    )
-    ()
+    })()
   }, [])
 
   // Switch to Torrent tab once when clipboard is detected as magnet/torrent
@@ -141,20 +130,8 @@ const AddLinkPopup = () => {
   // Switch to YouTube tab once when a youtube link was detected
   useEffect(() => {
     if (youtubeLink) {
-      // Start yt-dlp download and open a separate popup for progress
-      const startYoutubeDownload = async () => {
-        try {
-          // Initiate yt-dlp download; returns a download id (gid)
-          const ytDlpGid = await window.electronAPI.startYtDlpDownload({ url: youtubeLink })
-          // Open a new download popup window to show progress (reuse existing download UI)
-          await window.electronAPI.addDownloadPopup(ytDlpGid, "YouTube Download")
-        } catch (e) {
-          console.error("Failed to start YouTube download", e)
-        }
-        // Close the add‑link popup after launching the separate window
-        closePopupWindow(winId)
-      }
-      startYoutubeDownload()
+      setYoutubeUrl(youtubeLink)
+      setValue("YouTube")
     }
   }, [youtubeLink])
 
@@ -213,8 +190,7 @@ const AddLinkPopup = () => {
         setTorrentInputValue(selectedPath)
         resetTorrentResult()
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error("Failed to select torrent file:", error)
       setTorrentError("Failed to select a torrent file.")
     }
@@ -229,8 +205,7 @@ const AddLinkPopup = () => {
         setTorrentMetadata(metadata)
         setSelectedTorrentIndexes(metadata.torrentFiles?.map((_file, index) => index) ?? [])
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error("Failed to get torrent metadata File:", error)
     }
 
@@ -243,8 +218,7 @@ const AddLinkPopup = () => {
       try {
         const url = new URL(inputValue)
         if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Invalid protocol")
-      }
-      catch {
+      } catch {
         setTorrentError("Enter a valid HTTP or HTTPS torrent link.")
         return
       }
@@ -261,12 +235,10 @@ const AddLinkPopup = () => {
         setTorrentMetadata(metadata)
         setSelectedTorrentIndexes(metadata.torrentFiles?.map((_file, index) => index) ?? [])
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error("Failed to get torrent metadata:", error)
       setTorrentError("Failed to retrieve torrent metadata.")
-    }
-    finally {
+    } finally {
       setTorrentLoading(false)
     }
   }
@@ -280,13 +252,8 @@ const AddLinkPopup = () => {
 
     if (torrentInputType === "Torrent File") {
       const inputValue = torrentInputValue.trim()
-      gid = await window.electronAPI.addTorrentUrl(
-        joinIndexes,
-        inputValue
-      )
-    }
-    else {
-
+      gid = await window.electronAPI.addTorrentUrl(joinIndexes, inputValue)
+    } else {
       gid = await window.electronAPI.addTorrentUrl(
         joinIndexes,
         `${torrentMetadata?.savePath}/${torrentMetadata?.torrentInfoHash}.torrent`
@@ -294,9 +261,7 @@ const AddLinkPopup = () => {
     }
     addDownloadPopup(gid, torrentMetadata?.fileName ?? "torrent download")
     closePopupWindow(winId)
-
   }
-
 
   const changeComponents = () => {
     switch (value) {
