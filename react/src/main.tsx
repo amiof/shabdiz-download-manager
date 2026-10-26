@@ -25,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<App />} />
           <Route path="/popup/:id/:urlLink/:linkOptions" element={<AddLinkPopup />} />
           <Route path="/downloadStart/:id/:fileName" element={<DownloadStart />} />
+          <Route path="/downloadStartYtDlp/:id/:fileName" element={<DownloadStart downloadSource={"yt-dlp"} />} />
           <Route path="options/:id" element={<OptionsPopup />} />
           <Route path="scheduler/:id" element={<SchedulerPopup />} />
           <Route path="share/:id" element={<SharePopup />} />

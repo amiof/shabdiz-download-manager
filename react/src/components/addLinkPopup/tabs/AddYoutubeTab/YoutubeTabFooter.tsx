@@ -3,17 +3,21 @@ import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined"
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
 import NavigateNextOutlinedIcon from "@mui/icons-material/NavigateNextOutlined"
 import Button from "@mui/material/Button"
-import { STATUS_TYPE } from "@src/types.ts"
+
+type Props = {
+  // the add-link window is closed once the download popup has been opened
+  windowId: string
+}
 
 // follows the same step based footer the torrent tab uses, every selection is
 // kept in the store so going back never loses it
-const YoutubeTabFooter = () => {
+const YoutubeTabFooter = (props: Props) => {
+  const { windowId } = props
   const step = useYoutubeTabStore((state) => state.step)
   const mediaInfo = useYoutubeTabStore((state) => state.mediaInfo)
   const videoFormatId = useYoutubeTabStore((state) => state.videoFormatId)
   const audioFormatId = useYoutubeTabStore((state) => state.audioFormatId)
   const downloading = useYoutubeTabStore((state) => state.downloading)
-  const downloadStatus = useYoutubeTabStore((state) => state.downloadStatus)
   const goToStep = useYoutubeTabStore((state) => state.goToStep)
   const startDownload = useYoutubeTabStore((state) => state.startDownload)
 
@@ -83,8 +87,8 @@ const YoutubeTabFooter = () => {
               color={"success"}
               size={"small"}
               endIcon={<DownloadOutlinedIcon />}
-              disabled={downloading || downloadStatus?.status === STATUS_TYPE.COMPLETE}
-              onClick={() => void startDownload()}
+              disabled={downloading}
+              onClick={() => void startDownload(windowId)}
             >
               Download
             </Button>

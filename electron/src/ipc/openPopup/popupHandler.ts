@@ -1,24 +1,35 @@
 import { ipcMain, IpcMainEvent } from "electron"
+import { TDownloadSource } from "../../types"
 import { POPUP_CHANNELS } from "../channels"
 import { createPopupWindow } from "../utils"
+import { buildDownloadPopupHashRoute } from "./downloadPopupRoute"
 import IpcMainInvokeEvent = Electron.IpcMainInvokeEvent
 
 const ipcPopupHandler = () => {
-  ipcMain.on(POPUP_CHANNELS.ADD_LINK_POPUP, (_: IpcMainEvent, id,url) => {
-    const urlLink=url? url : ""
-    createPopupWindow({ windowTitle: "addLink", height: 600, width: 650, hashRoute: `popup/:${id}/:${urlLink}/:""`, windowId: id })
-  })
-
-  ipcMain.handle(POPUP_CHANNELS.POPUP_START_DOWNLOAD, (event: IpcMainInvokeEvent, id, windowTitle) => {
+  ipcMain.on(POPUP_CHANNELS.ADD_LINK_POPUP, (_: IpcMainEvent, id, url) => {
+    const urlLink = url ? url : ""
     createPopupWindow({
-      windowTitle: windowTitle.trim() ? windowTitle : "download",
-      height: 450,
-      width: 900,
-      hashRoute: `downloadStart/:${id}/:${windowTitle}`,
+      windowTitle: "addLink",
+      height: 600,
+      width: 650,
+      hashRoute: `popup/:${id}/:${urlLink}/:""`,
       windowId: id
     })
-    return id
   })
+
+  ipcMain.handle(
+    POPUP_CHANNELS.POPUP_START_DOWNLOAD,
+    (event: IpcMainInvokeEvent, id, windowTitle?: string, downloadSource?: TDownloadSource) => {
+      createPopupWindow({
+        windowTitle: windowTitle?.trim() ? windowTitle : "download",
+        height: 450,
+        width: 900,
+        hashRoute: buildDownloadPopupHashRoute(id, windowTitle, downloadSource),
+        windowId: id
+      })
+      return id
+    }
+  )
 
   ipcMain.on(POPUP_CHANNELS.POPUP_OPEN_OPTIONS, (event: IpcMainInvokeEvent, id) => {
     createPopupWindow({

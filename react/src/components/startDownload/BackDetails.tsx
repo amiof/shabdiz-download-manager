@@ -7,15 +7,15 @@ import FolderIcon from "@mui/icons-material/Folder"
 import PlayArrowIcon from "@mui/icons-material/PlayArrow"
 import StopIcon from "@mui/icons-material/Stop"
 import { SpeedDial, SpeedDialAction, SpeedDialIcon, Tooltip } from "@mui/material"
+import Typography from "@mui/material/Typography"
 import MagnetIcon from "@src/assets/MagnetIcon.tsx"
+import SeedIcon from "@src/assets/seedIcon.tsx"
 import useDownloaderStore from "@src/store/downloaderStore.ts"
-import { STATUS_TYPE, TtellRes } from "@src/types.ts"
+import { STATUS_TYPE, TDownloadSource, TtellRes } from "@src/types.ts"
 import { toFiniteNumber } from "@src/utils.ts"
 import { ReactElement, useEffect, useState } from "react"
 import { ProgressBar } from "react-progressbar-fancy"
 import styles from "./style.module.scss"
-import SeedIcon from "@src/assets/seedIcon.tsx"
-import Typography from "@mui/material/Typography"
 
 type Props = {
   details: TDetails[]
@@ -24,6 +24,10 @@ type Props = {
   isMetaData: boolean
   isTorrent: boolean
   gid: string
+  downloadSource?: TDownloadSource
+  // yt-dlp reports its own percent, which is also valid when the size is unknown
+  progressPercent?: number
+  onCancelDownload?: () => Promise<void> | void
 }
 type actionButton = {
   Icon: ReactElement
@@ -31,8 +35,19 @@ type actionButton = {
   action?: () => void
 }
 const BackDetails = (props: Props) => {
-  const { details, downloadStatus, savePath, isTorrent, isMetaData, gid } = props
+  const {
+    details,
+    downloadStatus,
+    savePath,
+    isTorrent,
+    isMetaData,
+    gid,
+    downloadSource = "aria2",
+    progressPercent,
+    onCancelDownload
+  } = props
 
+  const isYtDlp = downloadSource === "yt-dlp"
   const closePopup = window.electronAPI.closePopupWindow
   const getAllDownloads = useDownloaderStore((state) => state.getAllDownloadsRow)
   const setDownloadDataToElectron = useDownloaderStore((state) => state.setActiveDataToElectron)
@@ -60,18 +75,34 @@ const BackDetails = (props: Props) => {
   // Show the magnet state once seeders are actually known or the torrent is done.
   const hasSeeders = numSeeders > 0 || isComplete
 
-  const percentage =
+  const computedPercentage =
     !isMetaData && totalLength > 0
-      ? Math.min(
-        100,
-        Math.max(
-          0,
-          Number(((completedLength / totalLength) * 100).toFixed(0))
-        )
-      )
+      ? Math.min(100, Math.max(0, Number(((completedLength / totalLength) * 100).toFixed(0))))
       : 0
 
-  const actionButtonData: actionButton[] = [
+  // a yt-dlp job reports its own percent, also while the total size is unknown
+  const percentage =
+    progressPercent !== undefined ? Math.min(100, Math.max(0, Math.round(progressPercent))) : computedPercentage
+
+  const cancelYtDlpAction = () => {
+    if (onCancelDownload) void onCancelDownload()
+  }
+
+  const closeAction = {
+    action: () => closePopup(gid),
+    Icon: <CancelIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
+    title: "Close"
+  }
+
+  const openAction = {
+    action: () => {
+      if (savePath) window.electronAPI.openFolder(savePath)
+    },
+    Icon: <FolderIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
+    title: "open"
+  }
+
+  const aria2Actions: actionButton[] = [
     {
       action: () => {
         window.electronAPI.stopDownloadByGid(gid)
@@ -92,19 +123,35 @@ const BackDetails = (props: Props) => {
       Icon: <DeleteIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
       title: "delete"
     },
-    {
-      action: () => closePopup(gid),
-      Icon: <CancelIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
-      title: "Close"
-    },
-    {
-      action: () => {
-        if (savePath) window.electronAPI.openFolder(savePath)
-      },
-      Icon: <FolderIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
-      title: "open"
-    }
+    closeAction,
+    openAction
   ]
+
+  // yt-dlp cannot pause/resume a running process, so it exposes cancel while
+  // active and delete once the job has settled
+  const ytDlpRunning =
+    !downloadStatus || downloadStatus.status === STATUS_TYPE.ACTIVE || downloadStatus.status === STATUS_TYPE.WAITING
+  const ytDlpActions: actionButton[] = [
+    ...(ytDlpRunning
+      ? [
+          {
+            action: cancelYtDlpAction,
+            Icon: <StopIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
+            title: "Cancel"
+          }
+        ]
+      : [
+          {
+            action: () => delecteAction(),
+            Icon: <DeleteIcon sx={{ color: "darkgray", width: "24px", height: "32px" }} />,
+            title: "delete"
+          }
+        ]),
+    closeAction,
+    openAction
+  ]
+
+  const actionButtonData = isYtDlp ? ytDlpActions : aria2Actions
 
   return (
     <>
@@ -118,19 +165,24 @@ const BackDetails = (props: Props) => {
             <div className={"pt-4 w-full"}>
               {isTorrent && (
                 <>
-                  {
-                    hasSeeders ?
-                      <div
-                        className={"absolute bottom-2 right-3 animate-pulse border p-1 pl-2 rounded-xl border-white/10  bg-white/5 backdrop-blur-lg flex flex-col items-center justify-center "}>
-                        <MagnetIcon style={{ fontSize: "46px" }} />
-                      </div>
-                      :
-                      <div
-                        className={"absolute bottom-2 right-3 animate-pulse flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-white/10 backdrop-blur-lg "}>
-                        <SeedIcon style={{ fontSize: "46px" }} />
-                        <Typography variant={"caption"}>Finding Seeders...</Typography>
-                      </div>
-                  }
+                  {hasSeeders ? (
+                    <div
+                      className={
+                        "absolute bottom-2 right-3 animate-pulse border p-1 pl-2 rounded-xl border-white/10  bg-white/5 backdrop-blur-lg flex flex-col items-center justify-center "
+                      }
+                    >
+                      <MagnetIcon style={{ fontSize: "46px" }} />
+                    </div>
+                  ) : (
+                    <div
+                      className={
+                        "absolute bottom-2 right-3 animate-pulse flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-white/10 backdrop-blur-lg "
+                      }
+                    >
+                      <SeedIcon style={{ fontSize: "46px" }} />
+                      <Typography variant={"caption"}>Finding Seeders...</Typography>
+                    </div>
+                  )}
                 </>
               )}
               {details.map(

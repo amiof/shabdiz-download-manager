@@ -3,6 +3,7 @@ import { TAria2Config, TNotificationDetailes, TProxyConfig, TTorrentConfig } fro
 import {
   resMetadataUrls,
   TDownloads,
+  TDownloadSource,
   TFileDetails,
   TGetGlobalStateResponse,
   TSchedulerConfig,
@@ -32,7 +33,7 @@ export interface IElectronAPI {
   tellStopped: () => Promise<TtellRes[]>
   tellWaiting: () => Promise<TtellRes[]>
   getGlobalStates: () => Promise<TGetGlobalStateResponse>
-  addDownloadPopup: (id: string, windowTitle?: string) => void
+  addDownloadPopup: (id: string, windowTitle?: string, downloadSource?: TDownloadSource) => Promise<string>
   getTellStatus: (gid: string) => Promise<TtellRes>
   setActiveDownloadData: (data: TtellRes) => void
   getActiveDownloadData: () => Promise<TtellRes[]>
@@ -80,10 +81,10 @@ export interface IElectronAPI {
   showNotification: (notif: TNotificationDetailes) => Promise<void>
   getTorrentConfig: () => Promise<TTorrentConfig>
   setTorrentConfig: (config: TTorrentConfig) => Promise<unknown>
-  getMetadataUrls: (url: string,customHeader?:string) => Promise<resMetadataUrls>
+  getMetadataUrls: (url: string, customHeader?: string) => Promise<resMetadataUrls>
   getMagnetMetadataUrls: (magnetUrl: string) => Promise<resMetadataUrls>
-  getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>,
-  getTorrentMetadataFile: (torrentPath: string) => Promise<resMetadataUrls>,
+  getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>
+  getTorrentMetadataFile: (torrentPath: string) => Promise<resMetadataUrls>
   addTorrentUrl: (selectedFile: string, filePath: string) => Promise<string>
   // yt-dlp
   getYtDlpStatus: () => Promise<TYtDlpStatus>

@@ -332,7 +332,7 @@ const AddLinkPopup = () => {
         </div>
         <div className={"flex items-center justify-between w-full px-10 h-[20%]"}>
           {value === "YouTube" ? (
-            <YoutubeTabFooter />
+            <YoutubeTabFooter windowId={winId} />
           ) : value === "Torrent" ? (
             <div className={"flex gap-2"}>
               {torrentStep === "files" && (

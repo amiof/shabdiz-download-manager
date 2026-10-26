@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildYtDlpDownloadArgs } from "../src/yt-dlp/yt-dlp-download-args"
+import { buildYtDlpDownloadArgs, YT_DLP_PROGRESS_TEMPLATE } from "../src/yt-dlp/yt-dlp-download-args.ts"
+import { YT_DLP_PROGRESS_MARKER } from "../src/yt-dlp/yt-dlp-progress.ts"
 
 const request = {
   url: "https://www.youtube.com/watch?v=abc",
@@ -24,11 +25,16 @@ test("the progress template is typed so it only applies to the download", () => 
   const template = args[args.indexOf("--progress-template") + 1]
 
   assert.ok(template.startsWith("download:@@PROGRESS@@"), `unexpected template: ${template}`)
+  // the job-wide progress needs the id of the video/audio file it belongs to
+  assert.ok(template.includes("%(info.format_id)s"))
   assert.ok(template.includes("%(progress.downloaded_bytes)s"))
   assert.ok(template.includes("%(progress.total_bytes)s"))
   assert.ok(template.includes("%(progress.total_bytes_estimate)s"))
   assert.ok(template.includes("%(progress.speed)s"))
   assert.ok(template.includes("%(progress.eta)s"))
+
+  // the parser in yt-dlp-progress has to recognise the marker of this template
+  assert.ok(YT_DLP_PROGRESS_TEMPLATE.startsWith(`download:${YT_DLP_PROGRESS_MARKER}`))
 })
 
 test("a video only format is downloaded without a merge container", () => {

@@ -3,6 +3,7 @@ import {
   resMetadataUrls,
   STATUS_TYPE,
   TAria2Config,
+  TDownloadSource,
   TNotificationDetailes,
   TOptionsConfig,
   TProxyConfig,
@@ -39,8 +40,8 @@ interface ElectronAPI {
   removeAria2cListener: (callback: (event: IpcRendererEvent, response: Aria2cResponse) => void) => void
   getTellStatus: (gid: string) => Promise<unknown>
   getGlobalStates: () => Promise<unknown>
-  addDownloadPopup: (id: string, windowTitle?: string) => void
-  addLinkPopup: (id: string,url?:string) => void
+  addDownloadPopup: (id: string, windowTitle?: string, downloadSource?: TDownloadSource) => Promise<string>
+  addLinkPopup: (id: string, url?: string) => void
   openSharePopup: (id: string) => Promise<unknown>
   setSelectedRowsForShare: (rows: unknown[]) => void
   getSelectedRowsForShare: () => Promise<unknown[]>
@@ -75,7 +76,7 @@ interface ElectronAPI {
   showNotification: (notif: TNotificationDetailes) => Promise<void>
   getTorrentConfig: () => Promise<TTorrentConfig>
   setTorrentConfig: (config: TTorrentConfig) => Promise<unknown>
-  getMetadataUrls: (url: string,customHeader?:string) => Promise<unknown>
+  getMetadataUrls: (url: string, customHeader?: string) => Promise<unknown>
   getMagnetMetadataUrls: (magnetUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataUrls: (torrentUrl: string) => Promise<resMetadataUrls>
   getTorrentMetadataFile: (torrentUrl: string) => Promise<resMetadataUrls>
@@ -151,10 +152,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     options?: TOptionsConfig | null
   ) => await ipcRenderer.invoke("add-download-dir", url, dir, outFileName, proxyConfig, options),
   getDownloads: () => ipcRenderer.invoke("get-downloads"),
-  addLinkPopup: (id: string,url?:string) => ipcRenderer.send("add-link-popup", id,url),
+  addLinkPopup: (id: string, url?: string) => ipcRenderer.send("add-link-popup", id, url),
   closePopupWindow: (id: string) => ipcRenderer.send("close-popup", id),
   getTellStatus: (gid: string) => ipcRenderer.invoke("get-tell-status", gid),
-  addDownloadPopup: (id: string, windowTitle?: string) => ipcRenderer.invoke("popup-start-download", id, windowTitle),
+  addDownloadPopup: (id: string, windowTitle?: string, downloadSource?: TDownloadSource) =>
+    ipcRenderer.invoke("popup-start-download", id, windowTitle, downloadSource),
   getGlobalStates: () => ipcRenderer.invoke("get-global-state"),
   tellActive: () => ipcRenderer.invoke("tell-active"),
   tellStopped: () => ipcRenderer.invoke("tell-stoped"),
@@ -209,11 +211,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   //utils
   showNotification: (notifDetailes: TNotificationDetailes) => ipcRenderer.invoke("show-notification", notifDetailes),
-  getMetadataUrls: (url: string,customHeader?:string) => ipcRenderer.invoke("get-metadata-urls", url,customHeader),
+  getMetadataUrls: (url: string, customHeader?: string) => ipcRenderer.invoke("get-metadata-urls", url, customHeader),
   getMagnetMetadataUrls: (magnetUrl: string) => ipcRenderer.invoke("get-magnet-metadata-urls", magnetUrl),
   getTorrentMetadataUrls: (torrentUrl: string) => ipcRenderer.invoke("get-torrent-metadata-urls", torrentUrl),
   getTorrentMetadataFile: (torrentPath: string) => ipcRenderer.invoke("get-torrent-metadata-file", torrentPath),
-  addTorrentUrl: (selectedFile: string, filePath: string) => ipcRenderer.invoke("add-torrent-url", selectedFile, filePath),
+  addTorrentUrl: (selectedFile: string, filePath: string) =>
+    ipcRenderer.invoke("add-torrent-url", selectedFile, filePath),
 
   //yt-dlp
   getYtDlpStatus: () => ipcRenderer.invoke("get-yt-dlp-status"),

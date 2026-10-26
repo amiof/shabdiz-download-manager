@@ -28,13 +28,17 @@ import {
 } from "./yt-dlp-cookie-file"
 import { buildYtDlpDownloadArgs } from "./yt-dlp-download-args"
 import {
+  getYtDlpJobTotalSize,
+  parseYtDlpFilePath,
+  parseYtDlpProgressLine,
+  YtDlpProgressTracker
+} from "./yt-dlp-progress"
+import {
   buildSubtitleArgs,
   buildYtDlpAuthArgs,
   checkSystemPlatform,
   getYtDlpAssetName,
   getYtDlpReleaseUrl,
-  parseYtDlpFilePath,
-  parseYtDlpProgressLine,
   pickMediaInfo,
   resolveMergeContainer,
   toYtDlpUserError
@@ -50,6 +54,9 @@ export default class YtDlp {
   // running media downloads, keyed by the id that was handed to the renderer
   private processes = new Map<string, ChildProcess>()
   private downloads = new Map<string, TYtDlpDownloadStatus>()
+  // a video+audio selection is downloaded as two files, the tracker adds the
+  // bytes of both into the single progress the popup displays
+  private progressTrackers = new Map<string, YtDlpProgressTracker>()
   // the last parsed metadata, so a download request does not have to carry the
   // whole yt-dlp format list back to the main process
   private lastMediaInfo: { url: string; info: TYtDlpMediaInfo } | undefined = undefined
@@ -363,15 +370,20 @@ export default class YtDlp {
 
     if (!dir.trim()) throw new Error("Could not resolve the destination folder")
 
+    // the job total is the size of the video file plus the audio file, the
+    // progress percentage has to be based on that combined size
+    const totalLength = getYtDlpJobTotalSize(videoFormat, audioFormat)
+
     const id = generateId()
     const status: TYtDlpDownloadStatus = {
       id,
       status: STATUS_TYPE.ACTIVE,
       percent: 0,
       completedLength: "0",
-      totalLength: "0",
+      totalLength: String(totalLength),
       downloadSpeed: "0",
       dir,
+      url: request.url,
       title: request.title || mediaInfo.title
     }
 
@@ -388,6 +400,7 @@ export default class YtDlp {
     )
 
     this.downloads.set(id, status)
+    this.progressTrackers.set(id, new YtDlpProgressTracker(totalLength))
     this.pruneDownloads()
     await this.saveDownloadRow(id, status, request.url)
     this.spawnDownload(id, args, request, options, proxyConfig, dir)
@@ -461,24 +474,31 @@ export default class YtDlp {
 
     const progress = parseYtDlpProgressLine(line.trim())
     if (progress) {
-      const totalLength = progress.totalLength || Number(status.totalLength)
-      const percent =
-        totalLength > 0 ? Math.min(100, Math.round((progress.completedLength / totalLength) * 100)) : status.percent
+      const tracker = this.progressTrackers.get(id)
+      if (!tracker) return
+
+      const aggregate = tracker.update(progress)
 
       this.downloads.set(id, {
         ...status,
-        percent,
-        completedLength: String(progress.completedLength),
-        totalLength: String(totalLength),
-        downloadSpeed: String(progress.downloadSpeed),
-        eta: progress.eta
+        percent: aggregate.percent,
+        completedLength: String(aggregate.completedLength),
+        totalLength: String(aggregate.totalLength),
+        downloadSpeed: String(aggregate.downloadSpeed),
+        eta: aggregate.eta
       })
       return
     }
 
     const filePath = parseYtDlpFilePath(line)
     if (filePath) {
-      this.downloads.set(id, { ...status, filePath, completedLength: status.totalLength, downloadSpeed: "0" })
+      this.downloads.set(id, {
+        ...status,
+        filePath,
+        percent: 100,
+        completedLength: status.totalLength,
+        downloadSpeed: "0"
+      })
     }
   }
 
@@ -527,6 +547,7 @@ export default class YtDlp {
     }
 
     this.downloads.set(id, finished)
+    this.progressTrackers.delete(id)
     await this.saveDownloadRow(id, finished)
 
     if (outcome === STATUS_TYPE.COMPLETE) {

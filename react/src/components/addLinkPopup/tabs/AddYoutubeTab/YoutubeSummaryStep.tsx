@@ -1,5 +1,4 @@
 import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
-import YoutubeDownloadProgress from "@components/addLinkPopup/tabs/AddYoutubeTab/YoutubeDownloadProgress.tsx"
 import {
   destinationFolderLabel,
   formatAudioPrimaryLabel,
@@ -18,15 +17,6 @@ const YoutubeSummaryStep = () => {
   const subtitleChoices = useYoutubeTabStore((state) => state.subtitleChoices)
   const status = useYoutubeTabStore((state) => state.status)
   const error = useYoutubeTabStore((state) => state.error)
-  const downloadStatus = useYoutubeTabStore((state) => state.downloadStatus)
-
-  if (downloadStatus) {
-    return (
-      <div className={"w-full h-full px-8 py-4 overflow-auto"}>
-        <YoutubeDownloadProgress status={downloadStatus} />
-      </div>
-    )
-  }
 
   const videoFormat = mediaInfo?.videoFormats.find((format) => format.format_id === videoFormatId)
   const audioFormat = mediaInfo?.audioFormats.find((format) => format.format_id === audioFormatId)

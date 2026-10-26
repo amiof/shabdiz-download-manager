@@ -1,11 +1,5 @@
 import { TYtDlpStep } from "@components/addLinkPopup/types.ts"
-import {
-  TYtDlpDownloadStatus,
-  TYtDlpMediaInfo,
-  TYtDlpStatus,
-  TYtDlpSubtitle,
-  TYtDlpSubtitleSelection
-} from "@src/types.ts"
+import { TYtDlpMediaInfo, TYtDlpStatus, TYtDlpSubtitle, TYtDlpSubtitleSelection } from "@src/types.ts"
 
 export type TYoutubeTabStore = TYoutubeTabAction & TYoutubeTab
 
@@ -20,7 +14,6 @@ export type TYoutubeTab = {
   subtitleChoices: TYtDlpSubtitleSelection[]
   error: string
   downloading: boolean
-  downloadStatus: TYtDlpDownloadStatus | null
 }
 
 export type TYoutubeTabAction = {
@@ -34,7 +27,6 @@ export type TYoutubeTabAction = {
   setSubtitleFormat: (subtitle: TYtDlpSubtitle, format: string) => void
   clearSubtitles: () => void
   goToStep: (step: TYtDlpStep) => void
-  startDownload: () => Promise<void>
-  cancelDownload: () => Promise<void>
+  startDownload: (windowId: string) => Promise<void>
   resetFlow: () => void
 }

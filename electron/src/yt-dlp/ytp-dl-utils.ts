@@ -12,8 +12,6 @@ import type {
   TYtDlpSubtitleSelection
 } from "./type"
 import { parseHeaderOption, pickHeader } from "./yt-dlp-cookie-file"
-// the download argument list lives in its own module so it stays unit testable
-import { YT_DLP_FILE_MARKER, YT_DLP_PROGRESS_MARKER } from "./yt-dlp-download-args"
 
 export const checkSystemPlatform = () => {
   try {
@@ -150,43 +148,6 @@ export {
   YT_DLP_FILE_TEMPLATE,
   YT_DLP_PROGRESS_TEMPLATE
 } from "./yt-dlp-download-args"
-
-const toNumber = (value?: string): number => {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-export type TYtDlpProgress = {
-  completedLength: number
-  totalLength: number
-  downloadSpeed: number
-  eta?: number
-}
-
-// one progress line printed by yt-dlp through YT_DLP_PROGRESS_TEMPLATE
-export const parseYtDlpProgressLine = (line: string): TYtDlpProgress | null => {
-  if (!line.startsWith(YT_DLP_PROGRESS_MARKER)) return null
-
-  const [downloaded, total, totalEstimate, speed, eta] = line.replace(YT_DLP_PROGRESS_MARKER, "").split("|")
-
-  const totalLength = toNumber(total) || toNumber(totalEstimate)
-
-  return {
-    completedLength: toNumber(downloaded),
-    totalLength,
-    downloadSpeed: toNumber(speed),
-    eta: eta && eta !== "NA" ? toNumber(eta) : undefined
-  }
-}
-
-// the printed final file path of a finished download
-export const parseYtDlpFilePath = (line: string): string | null => {
-  const trimmed = line.trim()
-  if (!trimmed.startsWith(YT_DLP_FILE_MARKER)) return null
-
-  const filePath = trimmed.replace(YT_DLP_FILE_MARKER, "").trim()
-  return filePath || null
-}
 
 // file options of the add link popup are reused for yt-dlp too. cookieFilePath
 // is the netscape file written from the browser extension cookie header, it wins

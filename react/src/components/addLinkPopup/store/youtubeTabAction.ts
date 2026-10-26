@@ -1,28 +1,19 @@
 import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import { TYoutubeTabAction, TYoutubeTabStore } from "@components/addLinkPopup/store/youtubeTabStoreType.ts"
-import { STATUS_TYPE, TYtDlpDownloadRequest } from "@src/types.ts"
+import { TYtDlpDownloadRequest } from "@src/types.ts"
 import { StoreApi } from "zustand"
 
 export type SetState = StoreApi<TYoutubeTabStore>["setState"]
 export type GetState = StoreApi<TYoutubeTabStore>["getState"]
 
 const INSTALL_POLL_DELAY = 600
-const DOWNLOAD_POLL_DELAY = 500
 
 let installTimer: ReturnType<typeof setTimeout> | null = null
-let downloadTimer: ReturnType<typeof setTimeout> | null = null
 
 const clearInstallPolling = () => {
   if (installTimer) {
     clearTimeout(installTimer)
     installTimer = null
-  }
-}
-
-const clearDownloadPolling = () => {
-  if (downloadTimer) {
-    clearTimeout(downloadTimer)
-    downloadTimer = null
   }
 }
 
@@ -56,38 +47,6 @@ const pollInstallStatus = async (set: SetState, get: GetState) => {
   } catch (error) {
     console.error(error)
     set({ step: "install", error: "Could not check the yt-dlp installation." })
-  }
-}
-
-// yt-dlp does the media download itself, so the job is followed through the
-// yt-dlp status call instead of an aria2 gid
-const pollDownloadStatus = async (set: SetState, get: GetState) => {
-  const id = get().downloadStatus?.id
-  if (!id) return
-
-  try {
-    const status = await window.electronAPI.getYtDlpDownloadStatus(id)
-
-    if (!status) {
-      set({ downloading: false, error: "The download status is not available anymore." })
-      return
-    }
-
-    set({ downloadStatus: status })
-
-    if (status.status === STATUS_TYPE.ACTIVE || status.status === STATUS_TYPE.WAITING) {
-      downloadTimer = setTimeout(() => void pollDownloadStatus(set, get), DOWNLOAD_POLL_DELAY)
-      return
-    }
-
-    set({ downloading: false })
-
-    if (status.status === STATUS_TYPE.ERROR) {
-      set({ error: status.errorMessage ?? "The yt-dlp download failed." })
-    }
-  } catch (error) {
-    console.error(error)
-    set({ downloading: false, error: "Could not read the download progress." })
   }
 }
 
@@ -246,7 +205,7 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
     set({ step, error: "" })
   },
 
-  startDownload: async () => {
+  startDownload: async (windowId) => {
     const { mediaInfo, videoFormatId, audioFormatId, subtitleChoices, url, downloading } = get()
 
     if (!mediaInfo || !videoFormatId || downloading) return
@@ -269,7 +228,7 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
       title: mediaInfo.title
     }
 
-    set({ downloading: true, error: "", downloadStatus: null })
+    set({ downloading: true, error: "" })
 
     try {
       const { options, proxyConfig } = useAddLinkStore.getState()
@@ -280,33 +239,40 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
         return
       }
 
-      set({ downloadStatus: response.download })
-      downloadTimer = setTimeout(() => void pollDownloadStatus(set, get), DOWNLOAD_POLL_DELAY)
+      const download = response.download
+
+      try {
+        // the job is already owned by the main process, this window only opens
+        // the shared DownloadStart popup that follows it from now on
+        await window.electronAPI.addDownloadPopup(
+          download.id,
+          download.title || mediaInfo.title || "YouTube download",
+          "yt-dlp"
+        )
+      } catch (error) {
+        // never leave an invisible download running when its window failed
+        console.error("Failed to open the YouTube download popup:", error)
+
+        try {
+          await window.electronAPI.cancelYtDlpDownload(download.id)
+        } catch (cancelError) {
+          console.error("Failed to cancel the YouTube download without a popup:", cancelError)
+        }
+
+        set({ downloading: false, error: "The download window could not be opened." })
+        return
+      }
+
+      // this is the configuration window, it must not show the progress itself
+      window.electronAPI.closePopupWindow(windowId)
     } catch (error) {
       console.error(error)
       set({ downloading: false, error: "The download could not be started." })
     }
   },
 
-  cancelDownload: async () => {
-    const id = get().downloadStatus?.id
-    if (!id) return
-
-    clearDownloadPolling()
-
-    try {
-      await window.electronAPI.cancelYtDlpDownload(id)
-      const status = await window.electronAPI.getYtDlpDownloadStatus(id)
-      set({ downloadStatus: status, downloading: false })
-    } catch (error) {
-      console.error(error)
-      set({ downloading: false })
-    }
-  },
-
   resetFlow: () => {
     clearInstallPolling()
-    clearDownloadPolling()
 
     set({
       url: "",
@@ -317,7 +283,6 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
       subtitleChoices: [],
       error: "",
       downloading: false,
-      downloadStatus: null,
       step: get().status?.state === "installed" ? "url" : "install"
     })
   }

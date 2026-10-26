@@ -162,6 +162,7 @@ export type TYtDlpDownloadStatus = {
   eta?: number
   dir: string
   filePath?: string
+  url: string
   title?: string
   errorMessage?: string
 }

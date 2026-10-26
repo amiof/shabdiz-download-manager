@@ -164,6 +164,9 @@ export type TOptionsConfig = {
   cookie?: string
 }
 
+// which backend owns a download shown by the shared download popup
+export type TDownloadSource = "aria2" | "yt-dlp"
+
 export type TAria2Config = {
   maxConnection: string
   maxConnectionSplit: string
@@ -259,15 +262,15 @@ export enum Aria2Methods {
   TELL_ACTIVE = "aria2.tellActive",
   TELL_WAITING = "aria2.tellWaiting",
   TELL_STOPPED = "aria2.tellStopped",
-  
+
   // Global Statistics Methods
   GET_GLOBAL_STAT = "aria2.getGlobalStat",
-  
+
   // Session Management Methods
   SHUTDOWN = "aria2.shutdown",
   FORCE_SHUTDOWN = "aria2.forceShutdown",
   SAVE_SESSION = "aria2.saveSession",
-  
+
   // Configuration Methods
   CHANGE_POSITION = "aria2.changePosition",
   CHANGE_URI = "aria2.changeUri",
@@ -275,7 +278,7 @@ export enum Aria2Methods {
   CHANGE_OPTION = "aria2.changeOption",
   GET_GLOBAL_OPTION = "aria2.getGlobalOption",
   CHANGE_GLOBAL_OPTION = "aria2.changeGlobalOption",
-  
+
   // System Information Methods
   SYSTEM_MULTICALL = "system.multicall",
   SYSTEM_LIST_METHODS = "system.listMethods",

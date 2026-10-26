@@ -36,6 +36,9 @@ export enum STATUS_TYPE {
   ACTIVE = "active"
 }
 
+// which backend owns a download shown by the shared DownloadStart popup
+export type TDownloadSource = "aria2" | "yt-dlp"
+
 export type TtellRes = {
   bittorrent?: {
     announceList: string[][]
@@ -213,6 +216,7 @@ export type TYtDlpDownloadStatus = {
   eta?: number
   dir: string
   filePath?: string
+  url: string
   title?: string
   errorMessage?: string
 }

@@ -13,7 +13,6 @@ const useYoutubeTabStore = create<TYoutubeTabStore>((set, get) => ({
   subtitleChoices: [],
   error: "",
   downloading: false,
-  downloadStatus: null,
   ...youtubeTabAction(set, get)
 }))
 

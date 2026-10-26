@@ -1,4 +1,4 @@
-import { BrowserWindow, IpcMainEvent, ipcMain } from "electron"
+import { BrowserWindow, ipcMain, IpcMainEvent } from "electron"
 import path from "path"
 import { POPUP_CHANNELS } from "./channels"
 
@@ -31,13 +31,15 @@ export const createPopupWindow = (arg: TCreatePopupWindow) => {
   })
 
   popupWindow.setContentSize(width, height, true)
-  ipcMain.on(POPUP_CHANNELS.CLOSE_POPUP_WINDOW, (event: IpcMainEvent, id: string) => {
+
+  // one listener set per popup is only useful while that popup exists, so the
+  // closed event has to release it again
+  const handleClosePopup = (_event: IpcMainEvent, id: string) => {
     if (popupWindow && id === windowId) {
-      popupWindow.close() // Close the popup window
-      popupWindow = null // Reset the reference
+      popupWindow.close()
     }
-  })
-  ipcMain.on(POPUP_CHANNELS.WINDOW_POPUP_MAXIMIZE, (event: IpcMainEvent, id?: string) => {
+  }
+  const handleMaximizePopup = (_event: IpcMainEvent, id?: string) => {
     if (id && id !== windowId) return
 
     if (popupWindow?.isMaximized()) {
@@ -45,14 +47,15 @@ export const createPopupWindow = (arg: TCreatePopupWindow) => {
     } else {
       popupWindow?.maximize()
     }
-  })
-
-  ipcMain.on(POPUP_CHANNELS.WINDOW_POPUP_MINIMIZE, (event: IpcMainEvent, id?: string) => {
+  }
+  const handleMinimizePopup = (_event: IpcMainEvent, id?: string) => {
     if (id && id !== windowId) return
-    if (popupWindow) {
-      popupWindow?.minimize()
-    }
-  })
+    popupWindow?.minimize()
+  }
+
+  ipcMain.on(POPUP_CHANNELS.CLOSE_POPUP_WINDOW, handleClosePopup)
+  ipcMain.on(POPUP_CHANNELS.WINDOW_POPUP_MAXIMIZE, handleMaximizePopup)
+  ipcMain.on(POPUP_CHANNELS.WINDOW_POPUP_MINIMIZE, handleMinimizePopup)
   popupWindow.setMenuBarVisibility(false)
   const isDev = process.env.NODE_ENV === "development"
 
@@ -62,6 +65,9 @@ export const createPopupWindow = (arg: TCreatePopupWindow) => {
   popupWindow.loadURL(popupURL)
 
   popupWindow.on("closed", () => {
+    ipcMain.removeListener(POPUP_CHANNELS.CLOSE_POPUP_WINDOW, handleClosePopup)
+    ipcMain.removeListener(POPUP_CHANNELS.WINDOW_POPUP_MAXIMIZE, handleMaximizePopup)
+    ipcMain.removeListener(POPUP_CHANNELS.WINDOW_POPUP_MINIMIZE, handleMinimizePopup)
     popupWindow = null
   })
 }
