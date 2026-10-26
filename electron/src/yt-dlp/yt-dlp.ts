@@ -626,7 +626,7 @@ export default class YtDlp {
   // accepts them as a netscape cookie file, so it is written once and reused
   private resolveCookieFile = async (options?: TOptionsConfig | null): Promise<string | undefined> => {
     // a cookie file the user picked in the options tab is never overwritten
-    if (options?.cookie) return undefined
+    if (options?.cookie) return options.cookie
 
     const cookieHeader = pickCookieHeaderFromOptions(options)
     if (!cookieHeader) return undefined
