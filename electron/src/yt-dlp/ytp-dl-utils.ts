@@ -1,6 +1,8 @@
 import os from "os"
-import { TOptionsConfig, TProxyConfig } from "../types"
-import {
+// type only imports, so the helpers of this file stay loadable by node --test
+// without pulling the extensionless "../types" module into the runtime graph
+import type { TOptionsConfig, TProxyConfig } from "../types"
+import type {
   TYtDlpFormat,
   TYtDlpPlatform,
   TYtDlpRawFormat,
@@ -10,6 +12,8 @@ import {
   TYtDlpSubtitleSelection
 } from "./type"
 import { parseHeaderOption, pickHeader } from "./yt-dlp-cookie-file"
+// the download argument list lives in its own module so it stays unit testable
+import { YT_DLP_FILE_MARKER, YT_DLP_PROGRESS_MARKER } from "./yt-dlp-download-args"
 
 export const checkSystemPlatform = () => {
   try {
@@ -126,11 +130,6 @@ export const pickMediaInfo = (raw: TYtDlpRawMediaInfo) => ({
   subtitles: buildSubtitleList(raw.subtitles, raw.automatic_captions)
 })
 
-// yt-dlp does the merging itself: "VIDEO" when the format already has audio,
-// otherwise "VIDEO+AUDIO"
-export const buildFormatSelector = (videoFormatId: string, audioFormatId?: string): string =>
-  audioFormatId ? `${videoFormatId}+${audioFormatId}` : videoFormatId
-
 // container yt-dlp should write after merging, so the destination folder can be
 // resolved before the download starts
 export const resolveMergeContainer = (videoFormat: TYtDlpFormat, audioFormat?: TYtDlpFormat): string => {
@@ -145,12 +144,12 @@ export const resolveMergeContainer = (videoFormat: TYtDlpFormat, audioFormat?: T
   return "mkv"
 }
 
-export const YT_DLP_PROGRESS_TEMPLATE =
-  "@@PROGRESS@@%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"
-
-export const YT_DLP_FILE_MARKER = "@@FILE@@"
-
-export const YT_DLP_FILE_TEMPLATE = `after_move:${YT_DLP_FILE_MARKER}%(filepath)s`
+export {
+  buildFormatSelector,
+  buildYtDlpDownloadArgs,
+  YT_DLP_FILE_TEMPLATE,
+  YT_DLP_PROGRESS_TEMPLATE
+} from "./yt-dlp-download-args"
 
 const toNumber = (value?: string): number => {
   const parsed = Number(value)
@@ -166,9 +165,9 @@ export type TYtDlpProgress = {
 
 // one progress line printed by yt-dlp through YT_DLP_PROGRESS_TEMPLATE
 export const parseYtDlpProgressLine = (line: string): TYtDlpProgress | null => {
-  if (!line.startsWith("@@PROGRESS@@")) return null
+  if (!line.startsWith(YT_DLP_PROGRESS_MARKER)) return null
 
-  const [downloaded, total, totalEstimate, speed, eta] = line.replace("@@PROGRESS@@", "").split("|")
+  const [downloaded, total, totalEstimate, speed, eta] = line.replace(YT_DLP_PROGRESS_MARKER, "").split("|")
 
   const totalLength = toNumber(total) || toNumber(totalEstimate)
 

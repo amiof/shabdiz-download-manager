@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildYtDlpDownloadArgs } from "../src/yt-dlp/yt-dlp-download-args.ts"
+import { buildYtDlpDownloadArgs } from "../src/yt-dlp/yt-dlp-download-args"
 
 const request = {
   url: "https://www.youtube.com/watch?v=abc",

@@ -26,8 +26,8 @@ import {
   parseCookieHeader,
   pickCookieHeaderFromOptions
 } from "./yt-dlp-cookie-file"
+import { buildYtDlpDownloadArgs } from "./yt-dlp-download-args"
 import {
-  buildFormatSelector,
   buildSubtitleArgs,
   buildYtDlpAuthArgs,
   checkSystemPlatform,
@@ -37,9 +37,7 @@ import {
   parseYtDlpProgressLine,
   pickMediaInfo,
   resolveMergeContainer,
-  toYtDlpUserError,
-  YT_DLP_FILE_TEMPLATE,
-  YT_DLP_PROGRESS_TEMPLATE
+  toYtDlpUserError
 } from "./ytp-dl-utils"
 
 export default class YtDlp {
@@ -378,23 +376,16 @@ export default class YtDlp {
     }
 
     const cookieFilePath = await this.resolveCookieFile(options)
-    const args = [
-      "--no-playlist",
-      "--no-warnings",
-      "--newline",
-      "--no-simulate",
-      "--progress-template",
-      YT_DLP_PROGRESS_TEMPLATE,
-      "--print",
-      YT_DLP_FILE_TEMPLATE,
-      "-f",
-      buildFormatSelector(videoFormat.format_id, audioFormat?.format_id),
-      "-o",
-      path.join(dir, "%(title)s.%(ext)s"),
-      ...(audioFormat ? ["--merge-output-format", container] : []),
-      ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
-      request.url
-    ]
+    const authArgs = buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath)
+    const args = buildYtDlpDownloadArgs(
+      {
+        url: request.url,
+        // the ids resolved from the fetched media info, not the raw request
+        videoFormatId: videoFormat.format_id,
+        audioFormatId: audioFormat?.format_id
+      },
+      { dir, container, authArgs }
+    )
 
     this.downloads.set(id, status)
     this.pruneDownloads()
