@@ -141,8 +141,20 @@ const AddLinkPopup = () => {
   // Switch to YouTube tab once when a youtube link was detected
   useEffect(() => {
     if (youtubeLink) {
-      setYoutubeUrl(youtubeLink)
-      setValue("YouTube")
+      // Start yt-dlp download and open a separate popup for progress
+      const startYoutubeDownload = async () => {
+        try {
+          // Initiate yt-dlp download; returns a download id (gid)
+          const ytDlpGid = await window.electronAPI.startYtDlpDownload({ url: youtubeLink })
+          // Open a new download popup window to show progress (reuse existing download UI)
+          await window.electronAPI.addDownloadPopup(ytDlpGid, "YouTube Download")
+        } catch (e) {
+          console.error("Failed to start YouTube download", e)
+        }
+        // Close the add‑link popup after launching the separate window
+        closePopupWindow(winId)
+      }
+      startYoutubeDownload()
     }
   }, [youtubeLink])
 
