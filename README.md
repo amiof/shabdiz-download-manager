@@ -229,14 +229,18 @@ shabdiz-download-manager/
 │   │   │   ├── openPopup/     # Popup window handlers
 │   │   │   ├── scheduler/     # Scheduler IPC handler
 │   │   │   ├── share/         # Share download info handler
+│   │   │   ├── editDownload/  # Edit download options handler
+│   │   │   ├── ytDlp/         # yt-dlp IPC handler
 │   │   │   └── utils/         # IPC utilities
+│   │   ├── http-server/       # Local HTTP server for browser extension (port 3325)
+│   │   │   └── httpServer.ts
 │   │   ├── yt-dlp/            # YouTube downloader (yt-dlp) integration
-│   │   │   ├── yt-dlp.ts          # Main yt-dlp wrapper class
-│   │   │   ├── yt-dlp-cookie-file.ts # Netscape cookie file builder
-│   │   │   ├── yt-dlp-download-args.ts # Download argument builder
-│   │   │   ├── yt-dlp-progress.ts   # Progress parser for yt-dlp output
-│   │   │   ├── type.ts            # Type definitions
-│   │   │   └── ytp-dl-utils.ts     # Shared utilities
+│   │   │   ├── yt-dlp.ts                    # Main yt-dlp wrapper class
+│   │   │   ├── yt-dlp-cookie-file.ts        # Netscape cookie file builder
+│   │   │   ├── yt-dlp-download-args.ts      # Download argument builder
+│   │   │   ├── yt-dlp-progress.ts           # Progress parser for yt-dlp output
+│   │   │   ├── type.ts                      # Type definitions
+│   │   │   └── ytp-dl-utils.ts              # Shared utilities
 │   │   ├── preload/           # Preload scripts
 │   │   │   └── preload.ts     # Context bridge API
 │   │   ├── release-aria2/     # aria2c binaries
@@ -247,17 +251,22 @@ shabdiz-download-manager/
 │   │   │   └── schedulerProcess.ts
 │   │   └── store/             # Electron store
 │   │       └── electronStore.ts
+│   ├── test/                  # node --test unit tests (yt-dlp helpers, routes)
 │   └── package.json
 ├── react/                     # React frontend
 │   ├── src/
 │   │   ├── components/        # React components
 │   │   │   ├── loading/       # Loading & shutdown spinners
 │   │   │   ├── addLinkPopup/  # Add download link popup
+│   │   │   │   ├── store/     # Add link form state (Zustand)
+│   │   │   │   └── tabs/
+│   │   │   │       ├── AddTorrentTab/  # Torrent file tree & selection
+│   │   │   │       └── AddYoutubeTab/  # YouTube (yt-dlp) wizard steps
 │   │   │   ├── buttonAction/  # Toolbar button action component
 │   │   │   ├── header/        # App header with speed display & search
 │   │   │   ├── main/          # Main download list (DataGrid)
 │   │   │   ├── sidebar/       # Sidebar navigation tree
-│   │   │   ├── startDownload/ # Download start dialog
+│   │   │   ├── startDownload/ # Download start dialog (aria2 & yt-dlp)
 │   │   │   └── toolbar/       # Toolbar with action buttons
 │   │   │       └── ToolbarPopups/
 │   │   │           ├── OptionsPopup.tsx    # Options/settings panel
@@ -266,7 +275,8 @@ shabdiz-download-manager/
 │   │   │           ├── ProxyConfig.tsx     # Proxy settings
 │   │   │           ├── Aria2Conf.tsx       # aria2c configuration
 │   │   │           ├── StorageConf.tsx     # Storage directory settings
-│   │   │           └── torrentConf.tsx     # Torrent settings
+│   │   │           ├── torrentConf.tsx     # Torrent settings
+│   │   │           └── editPopup/          # Edit download options popup
 │   │   ├── hooks/             # Custom React hooks
 │   │   ├── store/             # Zustand stores
 │   │   │   ├── downloaderStore.ts    # Download state store
