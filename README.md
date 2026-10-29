@@ -39,12 +39,39 @@ A modern, cross-platform download manager built with Electron, React, and aria2c
 - **Torrent Configuration**: Fine-tune DHT, peer exchange, seed ratio, and live seeder indicators
 - **Storage Management**: Select and manage download storage directories
 - **Browser Extension Support**: Send download links directly from Chrome or Firefox to Shabdiz via the [Shabdiz Browser Extension](https://github.com/amiof/shabdiz-browser-extension)
+- **YouTube Downloader**: Download videos, playlists, and audio from YouTube using yt-dlp with format selection,
+  subtitle support, and browser cookie authentication
 
 ## 🧩 Browser Extension
 
 Shabdiz ships with a companion browser extension for **Chrome** and **Firefox**. Once installed, you can send download links from your browser straight to the download manager — Shabdiz runs a local server on port `3325` that receives links from the extension and starts downloading instantly.
 
 **Download / install:** [shabdiz-browser-extension](https://github.com/amiof/shabdiz-browser-extension)
+
+## 📺 YouTube Downloader
+
+Shabdiz includes a built-in YouTube downloader powered by **yt-dlp**. Access it via the "Add Link" dialog → **YouTube**
+tab.
+
+### Features
+
+- **Multi-step workflow**: Source → Formats → Subtitles → Summary → Progress
+- **Format selection**: Choose video quality (up to 8K), audio-only, codecs (VP9, AV1, H.264), and containers (MP4,
+  WebM, MKV)
+- **Subtitle support**: Download subtitles in multiple languages and formats (SRT, VTT, ASS)
+- **Cookie authentication**: Use cookies from the browser extension, a Netscape-format file, or proceed without cookies
+- **Real-time progress**: Live yt-dlp output with speed, ETA, and percentage in a dedicated popup window
+- **Automatic yt-dlp management**: Downloads and updates yt-dlp binary per platform automatically
+
+### Usage
+
+1. Click **+ Add Link** in the toolbar
+2. Select the **YouTube** tab
+3. Paste a YouTube URL (video, playlist, channel, or Shorts)
+4. Choose cookie source (Browser Extension recommended for age-restricted/private content)
+5. Select desired formats and subtitles
+6. Review summary and click **Start Download**
+7. Watch progress in the dedicated YouTube download popup
 
 ## 🏗️ Tech Stack
 
@@ -203,6 +230,13 @@ shabdiz-download-manager/
 │   │   │   ├── scheduler/     # Scheduler IPC handler
 │   │   │   ├── share/         # Share download info handler
 │   │   │   └── utils/         # IPC utilities
+│   │   ├── yt-dlp/            # YouTube downloader (yt-dlp) integration
+│   │   │   ├── yt-dlp.ts          # Main yt-dlp wrapper class
+│   │   │   ├── yt-dlp-cookie-file.ts # Netscape cookie file builder
+│   │   │   ├── yt-dlp-download-args.ts # Download argument builder
+│   │   │   ├── yt-dlp-progress.ts   # Progress parser for yt-dlp output
+│   │   │   ├── type.ts            # Type definitions
+│   │   │   └── ytp-dl-utils.ts     # Shared utilities
 │   │   ├── preload/           # Preload scripts
 │   │   │   └── preload.ts     # Context bridge API
 │   │   ├── release-aria2/     # aria2c binaries
