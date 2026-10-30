@@ -203,7 +203,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAria2Config: (config: TAria2Config) => ipcRenderer.invoke("set-aria2-config", config),
   getAria2Config: () => ipcRenderer.invoke("get-aria2-config"),
   selectStorageDirectory: () => ipcRenderer.invoke("select-storage-dir"),
-  getSelectedStorageDirectory: () => ipcRenderer.invoke("get-selected=storage-config-dir"),
+  getSelectedStorageDirectory: () => ipcRenderer.invoke("get-selected-storage-config-dir"),
   setSelectedStorageDirectory: (basePath: string) => ipcRenderer.invoke("set-selected-storage-directory", basePath),
   selectCookieFile: (fileType: "cookie" | "torrent" = "cookie") => ipcRenderer.invoke("select-cookie-file", fileType),
   getTorrentConfig: () => ipcRenderer.invoke("get-torrents-config"),
