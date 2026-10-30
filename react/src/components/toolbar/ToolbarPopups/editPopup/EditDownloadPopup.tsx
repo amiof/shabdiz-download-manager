@@ -207,7 +207,7 @@ export default function EditDownloadPopup() {
           </Tabs>
         </div>
 
-        <div className="flex-1 overflow-auto px-3 py-4 border border-white/10 backdrop-blur-2xl bg-white/5 shadow-2xl rounded-md">
+        <div className="flex-1 overflow-auto px-3 py-4 border border-white/10 backdrop-blur-2xl bg-white/5 shadow-2xl rounded-md light-scrollbar">
           <DownloadOptionsGroup
             statusDownload={statusDownloadRow}
             options={OPTION_GROUPS[activeTab]?.options ?? []}

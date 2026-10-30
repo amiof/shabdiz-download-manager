@@ -8,11 +8,11 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   /*line-height: 1.5;*/
   /*font-weight: 400;*/
-  
+
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: var(--color-neutral-900);
-  
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -39,6 +39,24 @@ body {
   overflow: hidden;
   background: transparent !important;
   /* border:1px solid red; */
+}
+
+.light-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.light-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.light-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.light-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
 }
 /*a {*/
 /*  font-weight: 500;*/

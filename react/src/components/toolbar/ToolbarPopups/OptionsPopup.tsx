@@ -37,7 +37,7 @@ const OptionsPopup = () => {
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full min-h-0 flex flex-col">
       <CustomTitleBar id={id} widthTitleBar="40%">
         <div
           className={clsx(
@@ -50,7 +50,7 @@ const OptionsPopup = () => {
       </CustomTitleBar>
       <div
         className={
-          "w-full h-full border-r border-l border-b border-[rgba(255,255,255,0.3)] rounded-xl flex bg-[radial-gradient(circle_at_15%_10%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_85%_85%,rgba(34,197,94,0.10),transparent_32%),linear-gradient(145deg,#05080d_0%,#0a1019_45%,#0d1420_100%)]"
+          "w-full flex-1 min-h-0 border-r border-l border-b border-[rgba(255,255,255,0.3)] rounded-xl flex bg-[radial-gradient(circle_at_15%_10%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_85%_85%,rgba(34,197,94,0.10),transparent_32%),linear-gradient(145deg,#05080d_0%,#0a1019_45%,#0d1420_100%)]"
         }
       >
         <div className={"w-1/4 h-full border-r border-r-stone-700"}>
