@@ -1,8 +1,15 @@
 import { ipcMain } from "electron"
 import { ytDlp } from "../../main"
 import { TOptionsConfig, TProxyConfig } from "../../types"
-import { TYtDlpDownloadRequest, TYtDlpDownloadResponse, TYtDlpMediaInfoResponse, TYtDlpStatus } from "../../yt-dlp/type"
+import {
+  TYtDlpDownloadRequest,
+  TYtDlpDownloadResponse,
+  TYtDlpMediaInfoResponse,
+  TYtDlpStatus,
+  TYtDlpUpdateStatus
+} from "../../yt-dlp/type"
 import { YT_DLP_CHANNELS } from "../channels"
+
 import IpcMainInvokeEvent = Electron.IpcMainInvokeEvent
 
 const toErrorMessage = (error: unknown): string =>
@@ -17,6 +24,15 @@ const emptyStatus = (error: string): TYtDlpStatus => ({
   ffmpegAvailable: false
 })
 
+const emptyUpdateStatus = (error: string): TYtDlpUpdateStatus => ({
+  state: "update-failed",
+  installed: false,
+  executablePath: "",
+  percent: 0,
+  speed: "0",
+  error
+})
+
 export const ipcYtDlpHandler = () => {
   // the installer download is finalized from main so it also finishes when the
   // popup is closed while yt-dlp is being downloaded
@@ -29,6 +45,37 @@ export const ipcYtDlpHandler = () => {
       console.error("[yt-dlp] Failed to read the installation status:", error)
       return emptyStatus("Could not check the yt-dlp installation")
     }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.GET_UPDATE_STATUS, async (): Promise<TYtDlpUpdateStatus> => {
+    try {
+      return await ytDlp.getUpdateStatus()
+    } catch (error) {
+      console.error("[yt-dlp] Failed to read the update status:", error)
+      return emptyUpdateStatus("Could not check the yt-dlp update status")
+    }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.CHECK_UPDATE, async (): Promise<TYtDlpUpdateStatus> => {
+    try {
+      return await ytDlp.checkUpdate()
+    } catch (error) {
+      console.error("[yt-dlp] Failed to check for a yt-dlp update:", error)
+      return emptyUpdateStatus(toErrorMessage(error))
+    }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.START_UPDATE, async (): Promise<TYtDlpUpdateStatus> => {
+    try {
+      return await ytDlp.startUpdate()
+    } catch (error) {
+      console.error("[yt-dlp] Failed to start the yt-dlp update:", error)
+      return emptyUpdateStatus(toErrorMessage(error))
+    }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.CLEAR_UPDATE_RESULT, () => {
+    ytDlp.clearUpdateResult()
   })
 
   ipcMain.handle(YT_DLP_CHANNELS.DOWNLOAD, async () => {

@@ -84,7 +84,7 @@ const Toolbar = () => {
       title: "Resume",
       action: () => {
         if (getSelectedRows[0]?.Gid) {
-          window.electronAPI.addDownloadPopup(getSelectedRows[0].Gid, getSelectedRows[0].FileName??"downloading..")
+          window.electronAPI.addDownloadPopup(getSelectedRows[0].Gid, getSelectedRows[0].FileName ?? "downloading..")
           window.electronAPI.unPauseByGid(getSelectedRows[0].Gid)
           getAllDownloads()
         }
@@ -149,14 +149,14 @@ const Toolbar = () => {
       action: openShareHandler
     }
   ]
-  
+
   // const addDownloadDir = window.electronAPI.addDownloadDir
   const addLinkPopup = window.electronAPI.addLinkPopup
   const openOptionsPopup = window.electronAPI.openOptionsPopup
   const openSchedulerPopup = window.electronAPI.openSchedulerPopup
   const openSharePopup = window.electronAPI.openSharePopup
   const openEditDownloadPopup = window.electronAPI.openEditDownloadPopup
-  
+
   // const getAllDownloadRow = useDownloaderStore((state) => state.getAllDownloadsRow)
 
   const clickHandler = async () => {

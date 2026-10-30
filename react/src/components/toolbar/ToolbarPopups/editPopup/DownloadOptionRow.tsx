@@ -1,5 +1,5 @@
-import { Chip, TextField, Tooltip } from "@mui/material"
 import RestartAltIcon from "@mui/icons-material/RestartAlt"
+import { Chip, TextField, Tooltip } from "@mui/material"
 import type { DownloadOption } from "./editDownloadTypes.ts"
 
 type Props = {
@@ -13,14 +13,14 @@ type Props = {
 }
 
 export default function DownloadOptionRow({
-                                            definition,
-                                            value,
-                                            globalValue,
-                                            saved,
-                                            onChange,
-                                            onReset,
-                                            statusDownload
-                                          }: Props) {
+  definition,
+  value,
+  globalValue,
+  saved,
+  onChange,
+  onReset,
+  statusDownload
+}: Props) {
   const disabled = statusDownload === "error" || statusDownload === "complete"
   const overridden = value !== globalValue
   return (

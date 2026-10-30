@@ -1,22 +1,22 @@
 import { Button, FormControl, Switch, TextField } from "@mui/material"
-import { useEffect, useState } from "react"
 import { TTorrentConfig } from "@src/store/storeType"
+import { useEffect, useState } from "react"
 
 type Props = {
   id: string
 }
 type TorrentField =
   | {
-  key: keyof TTorrentConfig
-  label: string
-  type: "switch"
-}
+      key: keyof TTorrentConfig
+      label: string
+      type: "switch"
+    }
   | {
-  key: keyof TTorrentConfig
-  label: string
-  type: "text"
-  inputType?: string
-}
+      key: keyof TTorrentConfig
+      label: string
+      type: "text"
+      inputType?: string
+    }
 
 const torrentFields: TorrentField[] = [
   { key: "enableDht", label: "Enable DHT", type: "switch" },
@@ -54,17 +54,17 @@ const TorrentConf = ({ id }: Props) => {
     maxOverallDownloadLimit: "",
     tracker: null
   })
-  
+
   useEffect(() => {
     ;(async () => {
       const defaultConfig = await window.electronAPI.getTorrentConfig()
       setFormValues(defaultConfig)
     })()
   }, [])
-  
+
   const handleChange = (key: keyof TTorrentConfig) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.type === "checkbox" ? event.target.checked : event.target.value
-    
+
     setFormValues((prev) => ({
       ...prev,
       [key]: value
@@ -79,7 +79,7 @@ const TorrentConf = ({ id }: Props) => {
       body: "Your torrent configuration has been saved successfully.\nRestart the app to apply changes if needed."
     })
   }
-  
+
   return (
     <div className="flex justify-center items-start pt-8 w-full h-[88%] overflow-y-scroll">
       <form onSubmit={submitHandler} className="w-[80%] h-full">
@@ -87,7 +87,7 @@ const TorrentConf = ({ id }: Props) => {
           {torrentFields.map((field) => (
             <div key={field.key} className="flex items-center justify-between">
               <p>{field.label}</p>
-              
+
               {field.type === "switch" ? (
                 <Switch checked={formValues[field.key] as boolean} onChange={handleChange(field.key)} />
               ) : (
@@ -101,7 +101,7 @@ const TorrentConf = ({ id }: Props) => {
             </div>
           ))}
         </FormControl>
-        
+
         <div className="w-full flex justify-end gap-2 absolute bottom-3 right-5">
           <Button type="submit" variant="contained">
             Save

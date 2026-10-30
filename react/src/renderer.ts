@@ -2,8 +2,8 @@ import { TAddLinkOptions } from "@components/addLinkPopup/store/addLinkStoreType
 import { TAria2Config, TNotificationDetailes, TProxyConfig, TTorrentConfig } from "@src/store/storeType.ts"
 import {
   resMetadataUrls,
-  TDownloads,
   TDownloadSource,
+  TDownloads,
   TFileDetails,
   TGetGlobalStateResponse,
   TSchedulerConfig,
@@ -13,7 +13,8 @@ import {
   TYtDlpDownloadResponse,
   TYtDlpDownloadStatus,
   TYtDlpMediaInfoResponse,
-  TYtDlpStatus
+  TYtDlpStatus,
+  TYtDlpUpdateStatus
 } from "@src/types.ts"
 
 export interface IElectronAPI {
@@ -101,6 +102,10 @@ export interface IElectronAPI {
   ) => Promise<TYtDlpDownloadResponse>
   getYtDlpDownloadStatus: (id: string) => Promise<TYtDlpDownloadStatus | null>
   cancelYtDlpDownload: (id: string) => Promise<boolean>
+  getYtDlpUpdateStatus: () => Promise<TYtDlpUpdateStatus>
+  checkYtDlpUpdate: () => Promise<TYtDlpUpdateStatus>
+  startYtDlpUpdate: () => Promise<TYtDlpUpdateStatus>
+  clearYtDlpUpdateResult: () => Promise<void>
   showContextMenu: (selectedItems: [] | TDownloads[]) => Promise<unknown>
   readClipboard: () => Promise<string>
   getSchedulerDownloadRows: () => Promise<TSchedulerGid[]>

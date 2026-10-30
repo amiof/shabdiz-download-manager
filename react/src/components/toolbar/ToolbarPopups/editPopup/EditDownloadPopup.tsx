@@ -1,13 +1,13 @@
 import CustomTitleBar from "@components/customTilebar/CustomTitleBar.tsx"
 import LinkIcon from "@mui/icons-material/Link"
 import { Alert, Button, Snackbar, Tab, Tabs, TextField } from "@mui/material"
-import { useEffect, useState } from "react"
-import DownloadOptionsGroup from "./DownloadOptionsGroup.tsx"
-import { ALL_OPTIONS, getOverrides, OPTION_GROUPS } from "./editDownloadTypes.ts"
-import { useLocation } from "react-router-dom"
 import { getIdFromLocation } from "@src/utils.ts"
 import clsx from "clsx"
+import { useEffect, useState } from "react"
+import { useLocation } from "react-router-dom"
 import styles from "../../style.module.scss"
+import DownloadOptionsGroup from "./DownloadOptionsGroup.tsx"
+import { ALL_OPTIONS, getOverrides, OPTION_GROUPS } from "./editDownloadTypes.ts"
 
 export default function EditDownloadPopup() {
   const [loading, setLoading] = useState(true)

@@ -73,6 +73,8 @@ export type ytDlpInfoData = {
   macAsset: GithubReleaseAsset | undefined
   // asset matching the platform this app is running on (may be arm64 on linux)
   asset: GithubReleaseAsset | undefined
+  // when this release was read from github, the cached copy is dropped after a day
+  checkedAt?: number
 }
 
 export type TYtDlpPlatform = "win" | "linux" | "macOS"
@@ -88,6 +90,30 @@ export type TYtDlpStatus = {
   speed: string
   error?: string
   ffmpegAvailable: boolean
+}
+
+// update state of the executable that is already installed. "check-failed" means
+// the latest release could not be read, it never implies that an update exists
+export type TYtDlpUpdateState =
+  | "not-installed"
+  | "up-to-date"
+  | "update-available"
+  | "unknown-version"
+  | "check-failed"
+  | "downloading"
+  | "installing"
+  | "updated"
+  | "update-failed"
+
+export type TYtDlpUpdateStatus = {
+  state: TYtDlpUpdateState
+  installed: boolean
+  installedVersion?: string
+  latestVersion?: string
+  executablePath: string
+  percent: number
+  speed: string
+  error?: string
 }
 
 // one entry of the yt-dlp "formats" list, trimmed to what the UI needs

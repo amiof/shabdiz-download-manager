@@ -12,6 +12,7 @@ import type {
   TYtDlpSubtitleSelection
 } from "./type"
 import { parseHeaderOption, pickHeader } from "./yt-dlp-cookie-file"
+import { resolveYtDlpAssetName } from "./yt-dlp-version"
 
 export const checkSystemPlatform = () => {
   try {
@@ -35,20 +36,8 @@ export const checkSystemPlatform = () => {
 }
 
 // name of the github release asset that is used as the executable on this machine
-export const getYtDlpAssetName = (): string => {
-  const platform = checkSystemPlatform() as TYtDlpPlatform | undefined
-
-  switch (platform) {
-    case "win":
-      return "yt-dlp.exe"
-    case "linux":
-      return process.arch === "arm64" ? "yt-dlp_linux_aarch64" : "yt-dlp_linux"
-    case "macOS":
-      return "yt-dlp_macos"
-    default:
-      throw new Error("This platform is not supported for yt-dlp")
-  }
-}
+export const getYtDlpAssetName = (): string =>
+  resolveYtDlpAssetName(checkSystemPlatform() as TYtDlpPlatform | undefined, process.arch)
 
 // github serves the newest build of an asset under this fixed link, so the
 // app can install yt-dlp even when the releases api is rate limited

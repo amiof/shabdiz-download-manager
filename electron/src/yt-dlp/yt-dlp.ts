@@ -1,7 +1,7 @@
 import { ChildProcess, execFile, spawn } from "child_process"
 import { app } from "electron"
 import { constants } from "fs"
-import { access, chmod, mkdir, writeFile } from "fs/promises"
+import { access, chmod, mkdir, rename, rm, stat, writeFile } from "fs/promises"
 import path from "path"
 import { DataSourceRepo } from "../database/database"
 import { Download } from "../database/entities/download"
@@ -12,11 +12,13 @@ import { STATUS_TYPE, Tfile, TOptionsConfig, TProxyConfig, TtellRes } from "../t
 import { directionFolder, generateId } from "../utils"
 import {
   GithubRelease,
+  GithubReleaseAsset,
   TYtDlpDownloadRequest,
   TYtDlpDownloadStatus,
   TYtDlpMediaInfo,
   TYtDlpRawMediaInfo,
   TYtDlpStatus,
+  TYtDlpUpdateStatus,
   ytDlpInfoData
 } from "./type"
 import {
@@ -33,6 +35,7 @@ import {
   parseYtDlpProgressLine,
   YtDlpProgressTracker
 } from "./yt-dlp-progress"
+import { compareYtDlpVersions, isSameYtDlpRelease, isYtDlpVersionComparable } from "./yt-dlp-version"
 import {
   buildSubtitleArgs,
   buildYtDlpAuthArgs,
@@ -44,11 +47,26 @@ import {
   toYtDlpUserError
 } from "./ytp-dl-utils"
 
+// a day, the update tab must not ask github every time it is opened
+const RELEASE_CACHE_TTL = 24 * 60 * 60 * 1000
+// temp files of an update that never finished are only trusted for a day
+const UPDATE_TEMP_TTL = 24 * 60 * 60 * 1000
+
 export default class YtDlp {
   lastInfo: ytDlpInfoData | undefined = undefined
 
   private installGid: string | undefined = undefined
   private installError: string | undefined = undefined
+  // the update install downloads into a temp file first, so its gid and its
+  // error are tracked apart from the fresh installation of a missing binary
+  private updateGid: string | undefined = undefined
+  private updateError: string | undefined = undefined
+  private updateTarget: string | undefined = undefined
+  private updateTag: string | undefined = undefined
+  private updateStartedAt = 0
+  // the swap finished, so the user is shown the result instead of another update
+  private updateCompleted = false
+  private lastUpdateCheckError: string | undefined = undefined
   private listenersInitialized = false
   private ffmpegAvailable: boolean | undefined = undefined
   // running media downloads, keyed by the id that was handed to the renderer
@@ -65,15 +83,37 @@ export default class YtDlp {
   // the cookie header the file was written from, a later link sends new cookies
   private cookieFileHeader: string | undefined = undefined
 
-  checkVersion() {
-    console.log("checkVersion")
+  // the binary keeps its release tag and the app never gets a stable tag back
+  // when the user runs a nightly build, so the metadata is cached on disk for a
+  // day and only refreshed when an update is actually offered
+  async getLastInfo(force = false): Promise<ytDlpInfoData | undefined> {
+    const cached = electronStore.get("ytDlp")?.release
+
+    if (!force && this.lastInfo) return this.lastInfo
+    if (!force && cached && cached.tag_name && Date.now() - (cached.checkedAt ?? 0) < RELEASE_CACHE_TTL) {
+      this.lastInfo = cached
+      return cached
+    }
+
+    // a failed check keeps the last known release instead of losing it
+    const info = await this.fetchLastInfo()
+    if (!info) return this.lastInfo ?? cached
+
+    this.lastUpdateCheckError = undefined
+    // checkedAt keeps the cached copy fresh, otherwise a manual check would be
+    // thrown away on the next open and github would be asked again
+    const stamped = { ...info, checkedAt: Date.now() }
+    this.lastInfo = stamped
+    electronStore.set("ytDlp", { version: electronStore.get("ytDlp")?.version ?? "", release: stamped })
+
+    return stamped
   }
 
-  async getLastInfo() {
-    if (this.lastInfo) return this.lastInfo
-
+  private async fetchLastInfo(): Promise<ytDlpInfoData | undefined> {
     try {
-      const response = await fetch("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
+      const response = await fetch("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" }
+      })
 
       if (!response.ok) {
         throw new Error(`GitHub answered with ${response.status}`)
@@ -82,7 +122,7 @@ export default class YtDlp {
       const release: GithubRelease = await response.json()
       const assetName = getYtDlpAssetName()
 
-      const InfoData: ytDlpInfoData = {
+      return {
         tag_name: release.tag_name,
         html_url: release.html_url,
         linux_asset: release.assets.find((asset) => asset.name === "yt-dlp_linux"),
@@ -90,12 +130,11 @@ export default class YtDlp {
         macAsset: release.assets.find((asset) => asset.name === "yt-dlp_macos"),
         asset: release.assets.find((asset) => asset.name === assetName)
       }
-      this.lastInfo = InfoData
-
-      return this.lastInfo
     } catch (error) {
       // the executable can still be installed from the fixed release link
+      const message = error instanceof Error ? error.message : String(error)
       console.error("[yt-dlp] Could not read the latest release from GitHub:", error)
+      this.lastUpdateCheckError = `Could not read the latest yt-dlp release from GitHub (${message})`
       return undefined
     }
   }
@@ -125,13 +164,20 @@ export default class YtDlp {
       // on linux and macOS the file also has to be executable
       if (checkSystemPlatform() === "win") await access(executablePath)
       else await access(executablePath, constants.X_OK)
-
-      const stored = electronStore.get("ytDlp")
-
-      return { installed: true, path: executablePath, version: stored?.version || undefined }
     } catch {
       return { installed: false, path: executablePath }
     }
+
+    const stored = electronStore.get("ytDlp")?.version
+    if (stored) return { installed: true, path: executablePath, version: stored }
+
+    // a binary that is there but was never stored (an install of an older app
+    // version, a cleared config) is read once and remembered, so the tab shows
+    // its version instead of "unknown"
+    const version = await this.readVersion()
+    if (version) electronStore.set("ytDlp", { version, release: electronStore.get("ytDlp")?.release })
+
+    return { installed: true, path: executablePath, version }
   }
 
   hasFfmpeg = async (): Promise<boolean> => {
@@ -142,6 +188,13 @@ export default class YtDlp {
     })
 
     return this.ffmpegAvailable
+  }
+
+  // the asset of the latest release when the check could not read it (github
+  // down, rate limited). The user asked for an install, so it is attempted
+  private async resolveLatestAsset(): Promise<{ tag?: string; asset?: GithubReleaseAsset }> {
+    const info = await this.getLastInfo()
+    return { tag: info?.tag_name, asset: info?.asset }
   }
 
   // downloads the platform asset of the latest release through aria2 and
@@ -157,10 +210,16 @@ export default class YtDlp {
     }
 
     const assetName = getYtDlpAssetName()
-    const info = await this.getLastInfo()
-    const url = info?.asset?.browser_download_url ?? getYtDlpReleaseUrl(assetName)
+    const { asset } = await this.resolveLatestAsset()
+    // a cached asset survives a failed release check, it can be a release behind,
+    // and the fixed link always serves the newest build
+    const url =
+      asset?.browser_download_url && !this.lastUpdateCheckError
+        ? asset.browser_download_url
+        : getYtDlpReleaseUrl(assetName)
     const directory = await this.ytDlpCreatePath()
 
+    await this.clearUpdateTempFiles()
     this.installError = undefined
 
     const gid = (await aria2.sendAria2cRequest("addUri", [
@@ -168,7 +227,10 @@ export default class YtDlp {
       {
         dir: directory,
         out: assetName,
-        continue: true,
+        // aresume is not safe here: an aborted attempt leaves a file of the
+        // right size that aria2 then reports as complete, and the broken file
+        // is what the user keeps. Always fetching it again replaces it.
+        continue: false,
         // a retry has to replace a file that was left behind by a failed attempt
         "allow-overwrite": "true"
       }
@@ -180,6 +242,401 @@ export default class YtDlp {
     console.log(`[yt-dlp] downloading ${assetName} into ${directory} (gid ${gid})`)
 
     return gid
+  }
+
+  // how the update tab sees the executable: an installed version is only called
+  // outdated when it could be compared against a latest release that was really
+  // read, a failed check stays "check-failed" and never offers an update
+  async getUpdateStatus(): Promise<TYtDlpUpdateStatus> {
+    const installed = await this.isInstalled()
+    const executablePath = this.getExecutablePath()
+
+    if (this.updateGid) {
+      const tell = (await aria2.sendAria2cRequest("tellStatus", [this.updateGid])) as TtellRes | undefined
+
+      if (tell?.gid && tell.status !== STATUS_TYPE.COMPLETE && tell.status !== STATUS_TYPE.ERROR) {
+        const totalLength = Number(tell.totalLength)
+        const completedLength = Number(tell.completedLength)
+
+        return {
+          state: "downloading",
+          installed: installed.installed,
+          installedVersion: installed.version,
+          latestVersion: this.updateTag,
+          executablePath,
+          percent: totalLength > 0 ? Math.min(100, Math.round((completedLength / totalLength) * 100)) : 0,
+          speed: tell.downloadSpeed
+        }
+      }
+
+      // the download finished, the swap that follows is short but not instant
+      if (tell?.gid && !this.updateError) {
+        return {
+          state: "installing",
+          installed: installed.installed,
+          installedVersion: installed.version,
+          latestVersion: this.updateTag,
+          executablePath,
+          percent: 100,
+          speed: "0"
+        }
+      }
+
+      // aria2 lost the job (the app was restarted) or it failed
+      if (!this.updateError) {
+        this.updateError = "The yt-dlp update download did not finish, try again"
+      }
+      this.updateGid = undefined
+    }
+
+    if (this.updateError) {
+      return {
+        state: this.updateStartedAt ? "update-failed" : "check-failed",
+        installed: installed.installed,
+        installedVersion: installed.version,
+        latestVersion: this.updateTag,
+        executablePath,
+        percent: 0,
+        speed: "0",
+        error: this.updateError
+      }
+    }
+
+    if (!installed.installed) {
+      return {
+        state: "not-installed",
+        installed: false,
+        executablePath,
+        percent: 0,
+        speed: "0",
+        latestVersion: this.lastInfo?.tag_name
+      }
+    }
+
+    const info = await this.getLastInfo()
+    const latestVersion = info?.tag_name
+    const installedVersion = installed.version
+
+    // without a release tag there is nothing to compare against. That is not an
+    // update, it is a check that could not be completed
+    if (!latestVersion || !isYtDlpVersionComparable(latestVersion)) {
+      return {
+        state: "check-failed",
+        installed: true,
+        installedVersion,
+        executablePath,
+        percent: 0,
+        speed: "0",
+        error: this.lastUpdateCheckError ?? "The latest yt-dlp version could not be read"
+      }
+    }
+
+    if (!installedVersion || !isYtDlpVersionComparable(installedVersion)) {
+      return {
+        state: "unknown-version",
+        installed: true,
+        latestVersion,
+        executablePath,
+        percent: 0,
+        speed: "0",
+        error: "The installed yt-dlp version could not be read, installing the latest release will repair it"
+      }
+    }
+
+    // the finished update is reported before the comparison, the replaced
+    // binary is already the latest release and would only read as "up to date"
+    if (this.updateCompleted) {
+      return {
+        state: "updated",
+        installed: true,
+        installedVersion,
+        latestVersion,
+        executablePath,
+        percent: 100,
+        speed: "0"
+      }
+    }
+
+    const comparison = compareYtDlpVersions(installedVersion, latestVersion)
+
+    // a newer binary than the published release is never called outdated, and a
+    // downgrade is never offered for it
+    if (comparison >= 0) {
+      return {
+        state: "up-to-date",
+        installed: true,
+        installedVersion,
+        latestVersion,
+        executablePath,
+        percent: 0,
+        speed: "0"
+      }
+    }
+
+    if (!info?.asset) {
+      return {
+        state: "check-failed",
+        installed: true,
+        installedVersion,
+        latestVersion,
+        executablePath,
+        percent: 0,
+        speed: "0",
+        error: `The ${getYtDlpAssetName()} file is missing from the ${latestVersion} release`
+      }
+    }
+
+    return {
+      state: "update-available",
+      installed: true,
+      installedVersion,
+      latestVersion,
+      executablePath,
+      percent: 0,
+      speed: "0"
+    }
+  }
+
+  // the download of an update lands next to the executable, so the final
+  // replacement is a rename inside the same folder and never a cross device move
+  async startUpdate(): Promise<TYtDlpUpdateStatus> {
+    if (this.updateGid) {
+      console.log("[yt-dlp] an update is already running")
+      return this.getUpdateStatus()
+    }
+
+    await this.clearUpdateTempFiles()
+    this.updateError = undefined
+    this.updateCompleted = false
+
+    const status = await this.getUpdateStatus()
+    if (status.state !== "update-available" && status.state !== "unknown-version") return status
+
+    const assetName = getYtDlpAssetName()
+    const info = await this.getLastInfo()
+    const url = info?.asset?.browser_download_url
+
+    if (!url) {
+      this.updateError = "The yt-dlp update file could not be resolved, check for updates again"
+      return this.getUpdateStatus()
+    }
+
+    const directory = await this.ytDlpCreatePath()
+    const target = path.join(directory, `${assetName}.update`)
+
+    this.updateTarget = target
+    this.updateTag = info?.tag_name
+    this.updateStartedAt = Date.now()
+
+    const gid = (await aria2.sendAria2cRequest("addUri", [
+      [url],
+      // always a fresh download, a finished update file must not be resumed
+      { dir: directory, out: path.basename(target), continue: false, "allow-overwrite": "true" }
+    ])) as string | undefined
+
+    if (!gid) {
+      this.updateError = "The yt-dlp update download could not be started"
+      return this.getUpdateStatus()
+    }
+
+    this.updateGid = gid
+    console.log(`[yt-dlp] downloading ${assetName} ${info?.tag_name} for an update (gid ${gid})`)
+
+    return this.getUpdateStatus()
+  }
+
+  // the manual "check for updates" button, it always asks github again
+  async checkUpdate(): Promise<TYtDlpUpdateStatus> {
+    if (this.updateGid) return this.getUpdateStatus()
+
+    this.updateError = undefined
+    this.updateCompleted = false
+    await this.getLastInfo(true)
+
+    return this.getUpdateStatus()
+  }
+
+  // lets the tab drop the "updated" result once the user looked at it
+  clearUpdateResult = () => {
+    this.updateCompleted = false
+    this.updateError = undefined
+  }
+
+  // temp download files belong to an update, the media downloads and the
+  // cookies.txt of the youtube tab are never touched
+  private clearUpdateTempFiles = async (): Promise<number> => {
+    const force = !this.updateGid
+
+    if (!force && Date.now() - this.updateStartedAt < UPDATE_TEMP_TTL) return 0
+
+    let removed = 0
+
+    try {
+      const directory = await this.ytDlpCreatePath()
+      const assetName = getYtDlpAssetName()
+
+      for (const filePath of [
+        path.join(directory, `${assetName}.update`),
+        path.join(directory, `${assetName}.update.aria2`)
+      ]) {
+        try {
+          const fileStat = await stat(filePath)
+          // a temp file of a running update is kept, only stale leftovers go
+          if (!force && Date.now() - fileStat.mtimeMs < UPDATE_TEMP_TTL) continue
+
+          await rm(filePath, { force: true })
+          removed++
+        } catch {
+          // the file is not there, nothing to clean up
+        }
+      }
+    } catch (error) {
+      console.error("[yt-dlp] Could not clean up the update temp files:", error)
+    }
+
+    return removed
+  }
+
+  // the downloaded file is validated before the working executable is touched,
+  // and the previous one is only dropped once the new one really runs
+  private applyUpdate = async (tempPath: string): Promise<"installed" | "failed"> => {
+    const executablePath = this.getExecutablePath()
+    const backupPath = `${executablePath}.old`
+    const expected = this.updateTag
+
+    // aria2 writes the file with the umask, so it is not executable yet. The
+    // bit is set before the file is started, otherwise the validation below
+    // fails with EACCES on every linux and macOS update (win has no such bit)
+    if (checkSystemPlatform() !== "win") {
+      try {
+        await chmod(tempPath, 0o755)
+      } catch (error) {
+        console.error("[yt-dlp] Could not make the update executable:", error)
+        this.updateError = "The downloaded yt-dlp file could not be made executable, the installed version was kept"
+        await rm(tempPath, { force: true })
+        return "failed"
+      }
+    }
+
+    const version = await this.readVersionFrom(tempPath)
+    if (!version) {
+      this.updateError = "The downloaded yt-dlp file could not be started, the installed version was kept"
+      await rm(tempPath, { force: true })
+      return "failed"
+    }
+
+    // a nightlies tag or an asset of another release must not overwrite the binary
+    if (expected && !isSameYtDlpRelease(version, expected)) {
+      this.updateError = `The downloaded file reports version ${version} instead of ${expected}, the installed version was kept`
+      await rm(tempPath, { force: true })
+      return "failed"
+    }
+
+    // the previous executable is moved aside on every platform, so a new file
+    // that stops answering can always be replaced by the one that worked. win
+    // also needs the move because it keeps a running executable locked
+    const hadExecutable = await access(executablePath).then(
+      () => true,
+      () => false
+    )
+
+    try {
+      await rm(backupPath, { force: true })
+    } catch (error) {
+      console.error("[yt-dlp] Could not drop the previous update backup:", error)
+    }
+
+    if (hadExecutable) {
+      try {
+        await rename(executablePath, backupPath)
+      } catch (error) {
+        this.updateError = this.toReplaceError(error, executablePath)
+        await rm(tempPath, { force: true })
+        console.error("[yt-dlp] Could not move the previous yt-dlp executable:", error)
+        return "failed"
+      }
+    }
+
+    try {
+      await rename(tempPath, executablePath)
+    } catch (error) {
+      // the executable is restored before the failure is reported
+      await this.restoreExecutable(backupPath, executablePath, hadExecutable)
+
+      this.updateError = this.toReplaceError(error, executablePath)
+      await rm(tempPath, { force: true })
+      console.error("[yt-dlp] Could not replace the yt-dlp executable:", error)
+      return "failed"
+    }
+
+    // never reported as an update before the new executable really answers
+    const installedVersion = await this.readVersion()
+    if (!installedVersion) {
+      await this.restoreExecutable(backupPath, executablePath, hadExecutable)
+      this.updateError = "The updated yt-dlp could not be started, the previous version was restored"
+      return "failed"
+    }
+
+    await rm(backupPath, { force: true })
+    await this.clearUpdateTempFiles()
+
+    electronStore.set("ytDlp", {
+      version: installedVersion,
+      release: electronStore.get("ytDlp")?.release
+    })
+    this.updateError = undefined
+    this.updateCompleted = true
+
+    console.log(`[yt-dlp] update finished, the installed version is now ${installedVersion}`)
+
+    return "installed"
+  }
+
+  // brings the executable that was moved aside back when the new file cannot
+  // replace it on any platform, win included
+  private restoreExecutable = async (backupPath: string, executablePath: string, hadExecutable: boolean) => {
+    if (!hadExecutable) return
+
+    try {
+      await rm(executablePath, { force: true })
+      await rename(backupPath, executablePath)
+    } catch (error) {
+      console.error("[yt-dlp] Could not restore the previous yt-dlp executable:", error)
+    }
+  }
+
+  private toReplaceError = (error: unknown, executablePath: string): string => {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (checkSystemPlatform() === "win") {
+      return `The yt-dlp update could not replace ${executablePath}. Close any running YouTube download and try again (${message})`
+    }
+
+    return `The yt-dlp update could not replace ${executablePath} (${message})`
+  }
+
+  private finishUpdate = async (gid: string): Promise<"installed" | "failed"> => {
+    const tempPath = this.updateTarget
+    this.updateGid = undefined
+
+    if (!tempPath) {
+      this.updateError = "The yt-dlp update file could not be found, try again"
+      await this.clearAria2Result(gid)
+      return "failed"
+    }
+
+    try {
+      const result = await this.applyUpdate(tempPath)
+      if (result === "failed") await this.clearUpdateTempFiles()
+      return result
+    } catch (error) {
+      this.updateError = error instanceof Error ? error.message : "The yt-dlp update failed"
+      console.error("[yt-dlp] The update failed:", error)
+      await this.clearUpdateTempFiles()
+      return "failed"
+    } finally {
+      await this.clearAria2Result(gid)
+    }
   }
 
   async getStatus(): Promise<TYtDlpStatus> {
@@ -266,6 +723,12 @@ export default class YtDlp {
     this.listenersInitialized = true
 
     aria2.on("onDownloadComplete", async ({ gid }: { gid: string }) => {
+      if (this.updateGid && gid === this.updateGid) {
+        const result = await this.finishUpdate(gid)
+        console.log(`[yt-dlp] update finished with state: ${result}`)
+        return
+      }
+
       if (!this.installGid || gid !== this.installGid) return
 
       const result = await this.finalizeInstall(gid)
@@ -274,6 +737,16 @@ export default class YtDlp {
     })
 
     aria2.on("onDownloadError", async ({ gid }: { gid: string }) => {
+      if (this.updateGid && gid === this.updateGid) {
+        const tell = (await aria2.sendAria2cRequest("tellStatus", [gid]).catch(() => undefined)) as TtellRes | undefined
+
+        this.updateError = tell?.errorMessage || "The yt-dlp update download failed"
+        await this.clearUpdateTempFiles()
+        this.updateGid = undefined
+        console.error(`[yt-dlp] update download failed for gid ${gid}`)
+        return
+      }
+
       if (!this.installGid || gid !== this.installGid) return
 
       this.installError = "The yt-dlp download failed"
@@ -606,7 +1079,23 @@ export default class YtDlp {
   }
 
   private finalizeInstall = async (gid: string): Promise<"installed" | "failed"> => {
+    // aria2 leaves the file without the execute bit, so it is set before the
+    // version is read, otherwise the read fails with EACCES
     await this.ensureExecutablePermission()
+
+    // the file has to be in the folder the youtube downloads read it from, a
+    // download that landed anywhere else is reported instead of stored
+    const executablePath = this.getExecutablePath()
+    const present = await access(executablePath).then(
+      () => true,
+      () => false
+    )
+
+    if (!present) {
+      this.installError = `The downloaded yt-dlp file is missing from ${executablePath}, please download it again`
+      await this.clearAria2Result(gid)
+      return "failed"
+    }
 
     const version = await this.readVersion()
     if (!version) {
@@ -615,7 +1104,8 @@ export default class YtDlp {
       return "failed"
     }
 
-    electronStore.set("ytDlp", { version })
+    // the cached release has to survive, electron-store replaces the whole object
+    electronStore.set("ytDlp", { version, release: electronStore.get("ytDlp")?.release })
     this.installError = undefined
     await this.clearAria2Result(gid)
 
@@ -657,11 +1147,13 @@ export default class YtDlp {
     }
   }
 
-  private readVersion = (): Promise<string | undefined> =>
+  private readVersion = (): Promise<string | undefined> => this.readVersionFrom(this.getExecutablePath())
+
+  private readVersionFrom = (filePath: string): Promise<string | undefined> =>
     new Promise((resolve) => {
-      execFile(this.getExecutablePath(), ["--version"], (error, stdout) => {
+      execFile(filePath, ["--version"], (error, stdout) => {
         if (error) {
-          console.error("[yt-dlp] The downloaded file could not be executed:", error.message)
+          console.error(`[yt-dlp] ${filePath} could not be executed:`, error.message)
           resolve(undefined)
           return
         }

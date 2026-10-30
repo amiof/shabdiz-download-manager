@@ -3,8 +3,9 @@ import Aria2Conf from "@components/toolbar/ToolbarPopups/Aria2Conf.tsx"
 import ProxyConfig from "@components/toolbar/ToolbarPopups/ProxyConfig.tsx"
 import StorageConf from "@components/toolbar/ToolbarPopups/StorageConf.tsx"
 import TorrentConf from "@components/toolbar/ToolbarPopups/torrentConf.tsx"
+import YtDlpConf from "@components/toolbar/ToolbarPopups/YtDlpConf.tsx"
 import { TOptionsTabs } from "@components/toolbar/types.ts"
-import { Hub, PlayForWork, SdCard, VpnLock } from "@mui/icons-material"
+import { Hub, PlayForWork, SdCard, VpnLock, YouTube } from "@mui/icons-material"
 import { Tab, Tabs } from "@mui/material"
 import { getIdFromLocation } from "@src/utils.ts"
 import clsx from "clsx"
@@ -31,6 +32,8 @@ const OptionsPopup = () => {
         return <StorageConf id={id} />
       case "torrent":
         return <TorrentConf id={id} />
+      case "yt-dlp":
+        return <YtDlpConf id={id} />
       default:
         return <ProxyConfig id={id} />
     }
@@ -59,6 +62,7 @@ const OptionsPopup = () => {
             <Tab label={"storage"} value={"storage"} iconPosition={"start"} icon={<SdCard />} />
             <Tab label={"TORRENT"} value={"torrent"} iconPosition={"start"} icon={<Hub />} />
             <Tab label={"proxy"} value={"proxy"} iconPosition={"start"} icon={<VpnLock />} />
+            <Tab label={"yt-dlp"} value={"yt-dlp"} iconPosition={"start"} icon={<YouTube />} />
           </Tabs>
         </div>
 

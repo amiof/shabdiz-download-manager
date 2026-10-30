@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron"
+import { contextBridge, IpcRendererEvent, ipcRenderer } from "electron"
 import {
   resMetadataUrls,
   STATUS_TYPE,
@@ -7,15 +7,16 @@ import {
   TNotificationDetailes,
   TOptionsConfig,
   TProxyConfig,
-  TtellRes,
-  TTorrentConfig
+  TTorrentConfig,
+  TtellRes
 } from "../types"
 import {
   TYtDlpDownloadRequest,
   TYtDlpDownloadResponse,
   TYtDlpDownloadStatus,
   TYtDlpMediaInfoResponse,
-  TYtDlpStatus
+  TYtDlpStatus,
+  TYtDlpUpdateStatus
 } from "../yt-dlp/type"
 
 interface Aria2cResponse {
@@ -96,6 +97,10 @@ interface ElectronAPI {
   ) => Promise<TYtDlpDownloadResponse>
   getYtDlpDownloadStatus: (id: string) => Promise<TYtDlpDownloadStatus | null>
   cancelYtDlpDownload: (id: string) => Promise<boolean>
+  getYtDlpUpdateStatus: () => Promise<TYtDlpUpdateStatus>
+  checkYtDlpUpdate: () => Promise<TYtDlpUpdateStatus>
+  startYtDlpUpdate: () => Promise<TYtDlpUpdateStatus>
+  clearYtDlpUpdateResult: () => Promise<void>
   showContextMenu: (id: string) => Promise<unknown>
   onContextMenuAction: (callback: (action: string | { action: string; [key: string]: any }) => void) => Promise<any>
   readClipboard: () => Promise<string>
@@ -230,6 +235,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ) => ipcRenderer.invoke("start-yt-dlp-download", request, options, proxyConfig),
   getYtDlpDownloadStatus: (id: string) => ipcRenderer.invoke("get-yt-dlp-download-status", id),
   cancelYtDlpDownload: (id: string) => ipcRenderer.invoke("cancel-yt-dlp-download", id),
+  getYtDlpUpdateStatus: () => ipcRenderer.invoke("get-yt-dlp-update-status"),
+  checkYtDlpUpdate: () => ipcRenderer.invoke("check-yt-dlp-update"),
+  startYtDlpUpdate: () => ipcRenderer.invoke("start-yt-dlp-update"),
+  clearYtDlpUpdateResult: () => ipcRenderer.invoke("clear-yt-dlp-update-result"),
 
   showContextMenu: (id: string) => ipcRenderer.invoke("show-context-menu", id),
   onContextMenuAction: (callback: (action: string | { action: string; [key: string]: any }) => void) => {

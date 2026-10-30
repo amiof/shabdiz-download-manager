@@ -1,1 +1,1 @@
-export type TOptionsTabs = "proxy" | "aria2" | "storage" | "torrent"
+export type TOptionsTabs = "proxy" | "aria2" | "storage" | "torrent" | "yt-dlp"

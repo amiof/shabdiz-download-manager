@@ -12,14 +12,14 @@ type Props = {
 }
 
 export default function DownloadOptionsGroup({
-                                               options,
-                                               values,
-                                               defaults,
-                                               saved,
-                                               onChange,
-                                               onReset,
-                                               statusDownload
-                                             }: Props) {
+  options,
+  values,
+  defaults,
+  saved,
+  onChange,
+  onReset,
+  statusDownload
+}: Props) {
   return (
     <div className="flex flex-col gap-3">
       {options.map((definition) => (

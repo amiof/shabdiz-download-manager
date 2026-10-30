@@ -148,6 +148,30 @@ export type TYtDlpStatus = {
   ffmpegAvailable: boolean
 }
 
+// update state of the executable that is already installed. "check-failed" means
+// the latest release could not be read, it never implies that an update exists
+export type TYtDlpUpdateState =
+  | "not-installed"
+  | "up-to-date"
+  | "update-available"
+  | "unknown-version"
+  | "check-failed"
+  | "downloading"
+  | "installing"
+  | "updated"
+  | "update-failed"
+
+export type TYtDlpUpdateStatus = {
+  state: TYtDlpUpdateState
+  installed: boolean
+  installedVersion?: string
+  latestVersion?: string
+  executablePath: string
+  percent: number
+  speed: string
+  error?: string
+}
+
 // hasAudio comes from the yt-dlp vcodec/acodec fields, not from the extension
 export type TYtDlpFormat = {
   format_id: string

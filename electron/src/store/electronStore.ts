@@ -1,5 +1,6 @@
 import Store from "electron-store"
 import { TAria2Config, TProxyConfig, TScheduler, TTorrentConfig } from "../types"
+import type { ytDlpInfoData } from "../yt-dlp/type"
 
 interface Schema {
   theme: string
@@ -10,7 +11,9 @@ interface Schema {
   selectedStorageDirectory: string | null
   torrentConfig: TTorrentConfig
   scheduler: TScheduler
-  ytDlp: { version: string }
+  // release is the cached github answer, so the options tab can show the latest
+  // version without asking github on every open
+  ytDlp: { version: string; release?: ytDlpInfoData }
 }
 
 //add electron-store for save settings to config.json
