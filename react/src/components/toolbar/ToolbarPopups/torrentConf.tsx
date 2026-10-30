@@ -87,13 +87,14 @@ const TorrentConf = ({ id }: Props) => {
           <FormControl className="w-[80%] mx-auto gap-3">
             {torrentFields.map((field) => (
               <div key={field.key} className="flex items-center justify-between">
-                <p>{field.label}</p>
+                <p className="text-sm">{field.label}</p>
 
                 {field.type === "switch" ? (
                   <Switch checked={formValues[field.key] as boolean} onChange={handleChange(field.key)} />
                 ) : (
                   <TextField
                     size="small"
+                    className="w-40"
                     value={formValues[field.key] as string}
                     onChange={handleChange(field.key)}
                     type={field.inputType ?? "text"}

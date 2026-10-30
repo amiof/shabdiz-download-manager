@@ -88,12 +88,13 @@ const Aria2Conf = ({ id }: Props) => {
         <FormControl className="w-full gap-4">
           {aria2Fields.map((field) => (
             <div className={"flex items-center justify-between "}>
-              <p>{field.label}</p>
+              <p className="text-sm">{field.label}</p>
               
               <TextField
                 key={field.key}
                 // label={field.label}
                 size={"small"}
+                className="w-40"
                 placeholder={field.placeholder}
                 type={field.type ?? "text"}
                 value={formValue[field.key] || ""}

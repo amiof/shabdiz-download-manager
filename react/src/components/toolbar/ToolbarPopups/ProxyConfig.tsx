@@ -66,6 +66,7 @@ const ProxyConfig = (props: Props) => {
           <TextField
             name="ip"
             size={"small"}
+            className="w-40"
             value={formValues.ip || ""}
             onChange={handleInputChange("ip")}
             placeholder="example: 127.0.0.1"
@@ -76,6 +77,7 @@ const ProxyConfig = (props: Props) => {
           <TextField
             name="port"
             size={"small"}
+            className="w-40"
             value={formValues.port || ""}
             onChange={handleInputChange("port")}
             label="Port"
@@ -87,6 +89,7 @@ const ProxyConfig = (props: Props) => {
           <TextField
             name="proxyUsername"
             size={"small"}
+            className="w-40"
             value={formValues.proxyUserName || ""}
             onChange={handleInputChange("proxyUserName")}
             label="Username"
@@ -97,6 +100,7 @@ const ProxyConfig = (props: Props) => {
           <TextField
             name="proxyPassword"
             size={"small"}
+            className="w-40"
             value={formValues.proxyPassword || ""}
             onChange={handleInputChange("proxyPassword")}
             label="Password"
