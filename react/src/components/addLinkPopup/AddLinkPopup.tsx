@@ -315,7 +315,7 @@ const AddLinkPopup = () => {
         }
       >
         <div className={"w-full px-5"}>
-          <Tabs orientation={"horizontal"} variant="scrollable" value={value} onChange={handleChange}>
+          <Tabs orientation={"horizontal"} variant="fullWidth" value={value} onChange={handleChange}>
             <Tab label={"Link"} value={"Link"} iconPosition={"start"} icon={<AddLink sx={{ rotate: "120deg" }} />} />
             <Tab label={"Torrent"} value={"Torrent"} iconPosition={"start"} icon={<DownloadOutlinedIcon />} />
             <Tab label={"YouTube"} value={"YouTube"} iconPosition={"start"} icon={<YouTubeIcon />} />
