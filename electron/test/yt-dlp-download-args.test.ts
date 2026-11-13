@@ -63,3 +63,40 @@ test("the auth args are passed before the url", () => {
 
   assert.deepEqual(args.slice(-3), ["--cookies", "/tmp/cookies.txt", request.url])
 })
+
+test("the managed ffmpeg binary is handed to yt-dlp for a merge", () => {
+  const args = buildYtDlpDownloadArgs(request, {
+    container: "mp4",
+    dir: "/tmp/out",
+    ffmpegLocation: "/home/user/.config/shabdiz/yt-dlp/ffmpeg"
+  })
+
+  // the app managed copy is never on the PATH, yt-dlp only finds it this way
+  assert.equal(args[args.indexOf("--ffmpeg-location") + 1], "/home/user/.config/shabdiz/yt-dlp/ffmpeg")
+  assert.equal(args[args.length - 1], request.url)
+})
+
+test("no ffmpeg argument is added when the system copy is used", () => {
+  const args = buildYtDlpDownloadArgs(request, { container: "mp4", dir: "/tmp/out" })
+
+  assert.ok(!args.includes("--ffmpeg-location"))
+})
+
+test("the javascript runtime of the app is passed to the download", () => {
+  const args = buildYtDlpDownloadArgs(request, {
+    container: "mp4",
+    dir: "/tmp/out",
+    jsRuntimeArgs: ["--js-runtimes", "node:/opt/Shabdiz/shabdiz"]
+  })
+
+  // the download extracts the page itself, so without the runtime YouTube
+  // would only offer the formats it already did for the metadata call
+  assert.equal(args[args.indexOf("--js-runtimes") + 1], "node:/opt/Shabdiz/shabdiz")
+  assert.equal(args[args.length - 1], request.url)
+})
+
+test("no javascript runtime argument is added for an older yt-dlp", () => {
+  const args = buildYtDlpDownloadArgs(request, { container: "mp4", dir: "/tmp/out" })
+
+  assert.ok(!args.includes("--js-runtimes"))
+})

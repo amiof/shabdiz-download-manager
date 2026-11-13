@@ -6,6 +6,7 @@ const useYoutubeTabStore = create<TYoutubeTabStore>((set, get) => ({
   step: "checking",
   url: "",
   status: null,
+  ffmpegStatus: null,
   fetching: false,
   mediaInfo: null,
   videoFormatId: null,

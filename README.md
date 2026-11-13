@@ -62,6 +62,14 @@ tab.
 - **Cookie authentication**: Use cookies from the browser extension, a Netscape-format file, or proceed without cookies
 - **Real-time progress**: Live yt-dlp output with speed, ETA, and percentage in a dedicated popup window
 - **Automatic yt-dlp management**: Downloads and updates yt-dlp binary per platform automatically
+- **Bundled ffmpeg**: yt-dlp cannot merge a video and an audio stream without ffmpeg, so the app installs a static
+  ffmpeg build next to the yt-dlp binary and hands its folder to yt-dlp through `--ffmpeg-location`. A system wide
+  ffmpeg is used when one is already on the `PATH`.
+- **Built-in JavaScript runtime**: solving YouTube's `n` challenge needs an external JS runtime, and yt-dlp only
+  enables `deno` by default. The app passes its own Electron executable to yt-dlp as the `node` runtime
+  (`--js-runtimes node:<executable>`) with `ELECTRON_RUN_AS_NODE` set, so nothing extra has to be installed. A
+  `deno` on the machine still takes priority, and the arguments are only passed to a yt-dlp release that supports
+  them.
 
 ### Usage
 
@@ -236,6 +244,8 @@ shabdiz-download-manager/
 │   │   │   └── httpServer.ts
 │   │   ├── yt-dlp/            # YouTube downloader (yt-dlp) integration
 │   │   │   ├── yt-dlp.ts                    # Main yt-dlp wrapper class
+│   │   │   ├── ffmpeg-assets.ts             # Static ffmpeg release asset resolution
+│   │   │   ├── yt-dlp-js-runtime.ts         # JavaScript runtime passed to yt-dlp for the YouTube n challenge
 │   │   │   ├── yt-dlp-cookie-file.ts        # Netscape cookie file builder
 │   │   │   ├── yt-dlp-download-args.ts      # Download argument builder
 │   │   │   ├── yt-dlp-progress.ts           # Progress parser for yt-dlp output

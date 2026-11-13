@@ -25,6 +25,12 @@ export type TYtDlpDownloadArgOptions = {
   // the resolved destination folder and the container yt-dlp should write
   dir: string
   container: string
+  // the path of the app managed ffmpeg binary, yt-dlp only finds it through this
+  // argument because it is never added to the PATH of the system
+  ffmpegLocation?: string
+  // the --js-runtimes args of buildJsRuntimeArgs, a download skips the https
+  // formats of YouTube when the n challenge cannot be solved
+  jsRuntimeArgs?: string[]
   // the auth args of buildYtDlpAuthArgs, appended verbatim before the url
   authArgs?: string[]
 }
@@ -54,6 +60,13 @@ export const buildYtDlpDownloadArgs = (
 
   // only a muxed download has to be merged afterwards
   if (request.audioFormatId) args.push("--merge-output-format", options.container)
+
+  // without it yt-dlp only looks for ffmpeg on the PATH, where the app managed
+  // copy never is
+  if (options.ffmpegLocation) args.push("--ffmpeg-location", options.ffmpegLocation)
+
+  // the download runs its own extraction, so it needs the runtime as well
+  if (options.jsRuntimeArgs?.length) args.push(...options.jsRuntimeArgs)
 
   if (options.authArgs?.length) args.push(...options.authArgs)
 

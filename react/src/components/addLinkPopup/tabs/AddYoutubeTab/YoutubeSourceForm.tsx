@@ -1,11 +1,13 @@
 import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
+import FfmpegNotice from "@components/addLinkPopup/tabs/AddYoutubeTab/FfmpegNotice.tsx"
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
 import Alert from "@mui/material/Alert"
 import CircularProgress from "@mui/material/CircularProgress"
 import IconButton from "@mui/material/IconButton"
 import TextField from "@mui/material/TextField"
 import Tooltip from "@mui/material/Tooltip"
+import { useEffect } from "react"
 
 const YoutubeSourceForm = () => {
   const url = useYoutubeTabStore((state) => state.url)
@@ -14,7 +16,14 @@ const YoutubeSourceForm = () => {
   const error = useYoutubeTabStore((state) => state.error)
   const setUrl = useYoutubeTabStore((state) => state.setUrl)
   const fetchMediaInfo = useYoutubeTabStore((state) => state.fetchMediaInfo)
+  const checkFfmpegStatus = useYoutubeTabStore((state) => state.checkFfmpegStatus)
   const options = useAddLinkStore((state) => state.options)
+
+  useEffect(() => {
+    // the copy the app manages itself, a system wide ffmpeg is reported by the
+    // install status instead
+    if (!status?.ffmpegAvailable) void checkFfmpegStatus()
+  }, [status?.ffmpegAvailable])
 
   // yt-dlp can only get cookies from a cookie file, so the youtube tab only
   // works when the extension header or a picked cookie file reaches it
@@ -51,11 +60,7 @@ const YoutubeSourceForm = () => {
         </Alert>
       )}
 
-      {status?.state === "installed" && !status.ffmpegAvailable && (
-        <Alert severity={"warning"}>
-          {"ffmpeg was not found, video and audio can only be merged when ffmpeg is installed."}
-        </Alert>
-      )}
+      <FfmpegNotice action={"Video and audio streams can only be merged with ffmpeg, and yt-dlp does not include one"} />
     </div>
   )
 }

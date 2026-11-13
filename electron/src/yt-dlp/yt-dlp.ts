@@ -10,11 +10,13 @@ import { aria2, mainWindow } from "../main"
 import { electronStore } from "../store/electronStore"
 import { STATUS_TYPE, Tfile, TOptionsConfig, TProxyConfig, TtellRes } from "../types"
 import { directionFolder, generateId } from "../utils"
+import { getFfmpegFileName, getFfmpegReleaseUrl, resolveFfmpegAssetName } from "./ffmpeg-assets"
 import {
   GithubRelease,
   GithubReleaseAsset,
   TYtDlpDownloadRequest,
   TYtDlpDownloadStatus,
+  TYtDlpFfmpegStatus,
   TYtDlpMediaInfo,
   TYtDlpRawMediaInfo,
   TYtDlpStatus,
@@ -29,6 +31,7 @@ import {
   pickCookieHeaderFromOptions
 } from "./yt-dlp-cookie-file"
 import { buildYtDlpDownloadArgs } from "./yt-dlp-download-args"
+import { buildJsRuntimeArgs, ELECTRON_NODE_ENV, supportsJsRuntimeArgs } from "./yt-dlp-js-runtime"
 import {
   getYtDlpJobTotalSize,
   parseYtDlpFilePath,
@@ -69,6 +72,11 @@ export default class YtDlp {
   private lastUpdateCheckError: string | undefined = undefined
   private listenersInitialized = false
   private ffmpegAvailable: boolean | undefined = undefined
+  // the app managed ffmpeg is downloaded through aria2, its gid and error are
+  // tracked apart from the install and the update of the yt-dlp executable
+  private ffmpegGid: string | undefined = undefined
+  private ffmpegError: string | undefined = undefined
+  private ffmpegLocation: string | undefined = undefined
   // running media downloads, keyed by the id that was handed to the renderer
   private processes = new Map<string, ChildProcess>()
   private downloads = new Map<string, TYtDlpDownloadStatus>()
@@ -160,6 +168,12 @@ export default class YtDlp {
 
   async isInstalled(): Promise<{ installed: boolean; path: string; version?: string }> {
     const executablePath = this.getExecutablePath()
+
+    // the install writes into a temp file and only renames it once it finished,
+    // so a running download is never mistaken for an installed binary. The gid
+    // is still checked because a failed attempt can leave a partial file
+    if (this.installGid) return { installed: false, path: executablePath }
+
     try {
       // on linux and macOS the file also has to be executable
       if (checkSystemPlatform() === "win") await access(executablePath)
@@ -175,19 +189,279 @@ export default class YtDlp {
     // version, a cleared config) is read once and remembered, so the tab shows
     // its version instead of "unknown"
     const version = await this.readVersion()
-    if (version) electronStore.set("ytDlp", { version, release: electronStore.get("ytDlp")?.release })
+
+    // a file that does not answer --version was never completed, it is reported
+    // as missing instead of leaving the tab with a binary that cannot run
+    if (!version) return { installed: false, path: executablePath }
+
+    electronStore.set("ytDlp", { version, release: electronStore.get("ytDlp")?.release })
 
     return { installed: true, path: executablePath, version }
+  }
+
+  // yt-dlp does not carry ffmpeg, the video and audio of a merged download can
+  // only be joined by a separate ffmpeg binary. The app keeps its own static
+  // copy next to the yt-dlp executable and falls back to a copy that is already
+  // installed on the system
+  getFfmpegPath = (): string =>
+    path.join(app.getPath("userData"), "yt-dlp", getFfmpegFileName(checkSystemPlatform()))
+
+  // execFile throws instead of calling back when the file cannot even be
+  // spawned (EFTYPE on a file that is not an executable), so the call is wrapped
+  private canRun = (filePath: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      try {
+        execFile(filePath, ["-version"], { windowsHide: true }, (error) => {
+          if (error) console.log(`[yt-dlp] ${filePath} does not start: ${error.code ?? ""} ${error.message}`)
+          resolve(!error)
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.log(`[yt-dlp] ${filePath} could not be spawned: ${message}`)
+        resolve(false)
+      }
+    })
+
+  // the antivirus of a machine scans an 80MB file it has just seen written and
+  // keeps it locked for a few seconds, a single failed start is not enough to
+  // delete a healthy download. The check is repeated a few times before the
+  // file is called broken.
+  private canRunEventually = async (filePath: string): Promise<boolean> => {
+    for (const delay of [0, 1000, 2000, 4000, 8000]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+      if (await this.canRun(filePath)) return true
+    }
+
+    return false
+  }
+
+  // the binary path that is handed to yt-dlp through --ffmpeg-location. The
+  // managed copy is never on the PATH, so yt-dlp cannot find it on its own.
+  // yt-dlp accepts a file or a folder, the file is used because it needs no
+  // guess about the executable suffix of the platform
+  resolveFfmpegLocation = async (): Promise<string | undefined> => {
+    if (this.ffmpegLocation) return this.ffmpegLocation
+
+    const managedPath = this.getFfmpegPath()
+    if (await this.canRun(managedPath)) {
+      this.ffmpegLocation = managedPath
+      return this.ffmpegLocation
+    }
+
+    // a system wide copy is found by yt-dlp itself, nothing has to be passed
+    return undefined
+  }
+
+  // YouTube hands out its playable formats only when yt-dlp can solve the "n"
+  // challenge, which needs a JavaScript runtime. The app carries one: Electron
+  // is a Node.js build and runs as plain node when ELECTRON_RUN_AS_NODE is set,
+  // so no separate deno or node installation is required. A deno on the machine
+  // still wins, yt-dlp ranks it above node
+  private resolveJsRuntime = (version: string | undefined): { args: string[]; env: NodeJS.ProcessEnv } => {
+    if (!supportsJsRuntimeArgs(version)) return { args: [], env: process.env }
+
+    return {
+      args: buildJsRuntimeArgs(process.execPath),
+      // the yt-dlp process passes its environment on to the runtime it starts
+      env: { ...process.env, [ELECTRON_NODE_ENV]: "1" }
+    }
   }
 
   hasFfmpeg = async (): Promise<boolean> => {
     if (this.ffmpegAvailable !== undefined) return this.ffmpegAvailable
 
-    this.ffmpegAvailable = await new Promise<boolean>((resolve) => {
-      execFile("ffmpeg", ["-version"], (error) => resolve(!error))
+    const available = (await this.resolveFfmpegLocation()) !== undefined || (await this.canRun("ffmpeg"))
+    this.ffmpegAvailable = available
+
+    return available
+  }
+
+  // a failed or abandoned ffmpeg download leaves a partial binary behind, the
+  // next attempt has to start from nothing
+  private clearFfmpegTempFiles = async (): Promise<void> => {
+    const ffmpegPath = this.getFfmpegPath()
+
+    for (const filePath of [`${ffmpegPath}.download`, `${ffmpegPath}.download.aria2`]) {
+      await rm(filePath, { force: true })
+    }
+  }
+
+  // the state of the ffmpeg copy the app manages itself, a system wide ffmpeg is
+  // not reported here because the app cannot install or update it
+  getFfmpegStatus = async (): Promise<TYtDlpFfmpegStatus> => {
+    const ffmpegPath = this.getFfmpegPath()
+
+    if (this.ffmpegGid) {
+      const tell = (await aria2
+        .sendAria2cRequest("tellStatus", [this.ffmpegGid])
+        .catch(() => undefined)) as TtellRes | undefined
+
+      if (tell?.gid) {
+        if (tell.status === STATUS_TYPE.ERROR || tell.status === STATUS_TYPE.REMOVED) {
+          this.ffmpegError = tell.errorMessage || "The ffmpeg download failed"
+          await this.clearFfmpegTempFiles()
+          await this.clearAria2Result(tell.gid)
+          this.ffmpegGid = undefined
+
+          return { state: "failed", path: ffmpegPath, percent: 0, speed: "0", error: this.ffmpegError }
+        }
+
+        if (tell.status === STATUS_TYPE.COMPLETE) {
+          const result = await this.finalizeFfmpeg(tell.gid)
+          this.ffmpegGid = undefined
+
+          if (result === "installed") return { state: "installed", path: ffmpegPath, percent: 100, speed: "0" }
+
+          return { state: "failed", path: ffmpegPath, percent: 0, speed: "0", error: this.ffmpegError }
+        }
+
+        const totalLength = Number(tell.totalLength)
+        const completedLength = Number(tell.completedLength)
+
+        return {
+          state: "downloading",
+          path: ffmpegPath,
+          percent: totalLength > 0 ? Math.min(100, Math.round((completedLength / totalLength) * 100)) : 0,
+          speed: tell.downloadSpeed
+        }
+      }
+
+      // the aria2 result is gone, the next check starts from scratch
+      this.ffmpegGid = undefined
+    }
+
+    // a known working binary is not started again on every poll
+    if (this.ffmpegAvailable === true || (await this.canRun(ffmpegPath))) {
+      this.ffmpegAvailable = true
+      return { state: "installed", path: ffmpegPath, percent: 100, speed: "0" }
+    }
+
+    return {
+      state: this.ffmpegError ? "failed" : "not-installed",
+      path: ffmpegPath,
+      percent: 0,
+      speed: "0",
+      error: this.ffmpegError
+    }
+  }
+
+  // downloads the static build of this platform through aria2, exactly like the
+  // yt-dlp executable, so the popup can show the same progress
+  downloadFfmpeg = async (): Promise<TYtDlpFfmpegStatus> => {
+    if (this.ffmpegGid) return this.getFfmpegStatus()
+
+    const assetName = resolveFfmpegAssetName(checkSystemPlatform(), process.arch)
+    if (!assetName) {
+      this.ffmpegError = "No ffmpeg build is available for this platform"
+      return this.getFfmpegStatus()
+    }
+
+    const ffmpegPath = this.getFfmpegPath()
+    if (await this.canRun(ffmpegPath)) {
+      return { state: "installed", path: ffmpegPath, percent: 100, speed: "0" }
+    }
+
+    // a file that is there but does not start is a broken leftover, it is
+    // replaced instead of being reported as installed forever
+    await rm(ffmpegPath, { force: true })
+
+    const directory = await this.ytDlpCreatePath()
+    // the release also publishes the plain, already decompressed binary. It is
+    // used instead of the gzipped asset, so nothing has to be unpacked into a
+    // second file: the download itself is the binary and is only renamed once
+    // it finished and answered its version
+    const tempName = `${path.basename(ffmpegPath)}.download`
+
+    // leftovers of an aborted attempt, including the old gzipped archive that
+    // this build no longer downloads
+    for (const leftover of [
+      tempName,
+      `${tempName}.aria2`,
+      `${path.basename(ffmpegPath)}.gz.download`,
+      `${path.basename(ffmpegPath)}.gz.download.aria2`
+    ]) {
+      await rm(path.join(directory, leftover), { force: true })
+    }
+    this.ffmpegError = undefined
+
+    const gid = (await aria2.sendAria2cRequest("addUri", [
+      [getFfmpegReleaseUrl(assetName)],
+      { dir: directory, out: tempName, continue: false, "allow-overwrite": "true" }
+    ])) as string | undefined
+
+    if (!gid) {
+      this.ffmpegError = "The ffmpeg download could not be started"
+      return this.getFfmpegStatus()
+    }
+
+    this.ffmpegGid = gid
+    console.log(`[yt-dlp] downloading ${assetName} as ffmpeg (gid ${gid})`)
+
+    return this.getFfmpegStatus()
+  }
+
+  // the downloaded file is started before it replaces the old one, so a broken
+  // or incomplete download never leaves the app without a working ffmpeg
+  private applyFfmpeg = async (gid: string): Promise<"installed" | "failed"> => {
+    const ffmpegPath = this.getFfmpegPath()
+    const tempPath = `${ffmpegPath}.download`
+
+    try {
+      const present = await access(tempPath).then(
+        () => true,
+        () => false
+      )
+
+      // the aria2 event and a status poll can both land here, and a finished
+      // install no longer leaves a temp file behind
+      if (!present) {
+        if (await this.canRun(ffmpegPath)) return "installed"
+
+        this.ffmpegError = "The downloaded ffmpeg file could not be found, please download it again"
+        return "failed"
+      }
+
+      // aria2 writes the file with the umask, so it carries no execute bit yet
+      if (checkSystemPlatform() !== "win") await chmod(tempPath, 0o755)
+
+      if (!(await this.canRunEventually(tempPath))) {
+        this.ffmpegError = "The downloaded ffmpeg file could not be started, please download it again"
+        await rm(tempPath, { force: true })
+        return "failed"
+      }
+
+      await rm(ffmpegPath, { force: true })
+      await rename(tempPath, ffmpegPath)
+
+      this.ffmpegAvailable = true
+      this.ffmpegLocation = ffmpegPath
+      this.ffmpegError = undefined
+      console.log(`[yt-dlp] ffmpeg installed at ${ffmpegPath}`)
+
+      return "installed"
+    } catch (error) {
+      console.error("[yt-dlp] Could not install the downloaded ffmpeg:", error)
+      this.ffmpegError = "The downloaded ffmpeg file could not be installed, please download it again"
+      await rm(tempPath, { force: true })
+      return "failed"
+    } finally {
+      await this.clearAria2Result(gid)
+    }
+  }
+
+  // the aria2 complete event and the status poll can both land here while the
+  // gid is still set, so the work is shared: every caller waits on the single
+  // running install instead of renaming the same temp file twice
+  private ffmpegFinalizing: Promise<"installed" | "failed"> | undefined = undefined
+
+  private finalizeFfmpeg = (gid: string): Promise<"installed" | "failed"> => {
+    if (this.ffmpegFinalizing) return this.ffmpegFinalizing
+
+    this.ffmpegFinalizing = this.applyFfmpeg(gid).finally(() => {
+      this.ffmpegFinalizing = undefined
     })
 
-    return this.ffmpegAvailable
+    return this.ffmpegFinalizing
   }
 
   // the asset of the latest release when the check could not read it (github
@@ -222,11 +496,22 @@ export default class YtDlp {
     await this.clearUpdateTempFiles()
     this.installError = undefined
 
+    // the asset lands in a temp file, never under the executable name. aria2
+    // preallocates the whole output file on windows before the first byte is
+    // written, so a download written straight to the executable path exists as
+    // a full sized, empty file while it is still running and is read as
+    // installed. The temp file is only renamed once the download finished and
+    // the binary answered its version.
+    const tempName = `${assetName}.download`
+
+    // a leftover of an aborted attempt would be resumed into a broken file
+    await this.clearInstallTempFiles()
+
     const gid = (await aria2.sendAria2cRequest("addUri", [
       [url],
       {
         dir: directory,
-        out: assetName,
+        out: tempName,
         // aresume is not safe here: an aborted attempt leaves a file of the
         // right size that aria2 then reports as complete, and the broken file
         // is what the user keeps. Always fetching it again replaces it.
@@ -639,33 +924,32 @@ export default class YtDlp {
     }
   }
 
+  // a failed or abandoned install leaves a partial temp file and its aria2
+  // control file behind, the next attempt has to start from nothing
+  private clearInstallTempFiles = async (): Promise<void> => {
+    const executablePath = this.getExecutablePath()
+
+    for (const filePath of [`${executablePath}.download`, `${executablePath}.download.aria2`]) {
+      await rm(filePath, { force: true })
+    }
+  }
+
   async getStatus(): Promise<TYtDlpStatus> {
     const executablePath = this.getExecutablePath()
     const ffmpegAvailable = await this.hasFfmpeg()
 
-    const installed = await this.isInstalled()
-    if (installed.installed) {
-      if (this.installGid) {
-        await this.clearAria2Result(this.installGid)
-        this.installGid = undefined
-      }
-
-      return {
-        state: "installed",
-        executablePath,
-        version: installed.version,
-        percent: 100,
-        speed: "0",
-        ffmpegAvailable
-      }
-    }
-
+    // a running install is reported before the executable is looked for, exactly
+    // like the ffmpeg status does it. aria2 preallocates the whole output file
+    // on windows before the first byte is written, so the file check below would
+    // call a download that is still running "installed" and stop the progress
+    // the tab is following
     if (this.installGid) {
       const tell = (await aria2.sendAria2cRequest("tellStatus", [this.installGid])) as TtellRes | undefined
 
       if (tell?.gid) {
         if (tell.status === STATUS_TYPE.ERROR || tell.status === STATUS_TYPE.REMOVED) {
           this.installError = tell.errorMessage || "The yt-dlp download failed"
+          await this.clearInstallTempFiles()
           await this.clearAria2Result(tell.gid)
           this.installGid = undefined
 
@@ -706,6 +990,18 @@ export default class YtDlp {
       this.installGid = undefined
     }
 
+    const installed = await this.isInstalled()
+    if (installed.installed) {
+      return {
+        state: "installed",
+        executablePath,
+        version: installed.version,
+        percent: 100,
+        speed: "0",
+        ffmpegAvailable
+      }
+    }
+
     return {
       state: this.installError ? "failed" : "not-installed",
       executablePath,
@@ -723,6 +1019,13 @@ export default class YtDlp {
     this.listenersInitialized = true
 
     aria2.on("onDownloadComplete", async ({ gid }: { gid: string }) => {
+      if (this.ffmpegGid && gid === this.ffmpegGid) {
+        const result = await this.finalizeFfmpeg(gid)
+        this.ffmpegGid = undefined
+        console.log(`[yt-dlp] ffmpeg installation finished with state: ${result}`)
+        return
+      }
+
       if (this.updateGid && gid === this.updateGid) {
         const result = await this.finishUpdate(gid)
         console.log(`[yt-dlp] update finished with state: ${result}`)
@@ -737,6 +1040,18 @@ export default class YtDlp {
     })
 
     aria2.on("onDownloadError", async ({ gid }: { gid: string }) => {
+      if (this.ffmpegGid && gid === this.ffmpegGid) {
+        const tell = (await aria2.sendAria2cRequest("tellStatus", [gid]).catch(() => undefined)) as TtellRes | undefined
+
+        this.ffmpegError = tell?.errorMessage || "The ffmpeg download failed"
+        // a partial download is never resumed, the next attempt starts fresh
+        await this.clearFfmpegTempFiles()
+        await this.clearAria2Result(gid)
+        this.ffmpegGid = undefined
+        console.error(`[yt-dlp] ffmpeg download failed for gid ${gid}`)
+        return
+      }
+
       if (this.updateGid && gid === this.updateGid) {
         const tell = (await aria2.sendAria2cRequest("tellStatus", [gid]).catch(() => undefined)) as TtellRes | undefined
 
@@ -749,7 +1064,11 @@ export default class YtDlp {
 
       if (!this.installGid || gid !== this.installGid) return
 
-      this.installError = "The yt-dlp download failed"
+      const tell = (await aria2.sendAria2cRequest("tellStatus", [gid]).catch(() => undefined)) as TtellRes | undefined
+
+      this.installError = tell?.errorMessage || "The yt-dlp download failed"
+      // a partial temp file is never resumed, the next attempt starts fresh
+      await this.clearInstallTempFiles()
       await this.clearAria2Result(gid)
       this.installGid = undefined
       console.error(`[yt-dlp] installation failed for gid ${gid}`)
@@ -765,13 +1084,21 @@ export default class YtDlp {
     if (!installed.installed) throw new Error("yt-dlp is not downloaded yet")
 
     const cookieFilePath = await this.resolveCookieFile(options)
-    const stdout = await this.runYtDlp([
-      "-J",
-      "--no-playlist",
-      "--no-warnings",
-      ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
-      url
-    ])
+    const runtime = this.resolveJsRuntime(installed.version)
+
+    // without the runtime YouTube answers with "Only images are available",
+    // which reads as a missing format list rather than as a broken challenge
+    const stdout = await this.runYtDlp(
+      [
+        "-J",
+        "--no-playlist",
+        "--no-warnings",
+        ...runtime.args,
+        ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
+        url
+      ],
+      runtime.env
+    )
 
     let raw: TYtDlpRawMediaInfo
     try {
@@ -834,8 +1161,10 @@ export default class YtDlp {
       throw new Error("Select an audio format for this video")
     }
 
-    if (audioFormat && !(await this.hasFfmpeg())) {
-      throw new Error("Merging video and audio needs ffmpeg, which was not found on this system")
+    const ffmpegLocation = audioFormat ? await this.resolveFfmpegLocation() : undefined
+
+    if (audioFormat && !ffmpegLocation && !(await this.canRun("ffmpeg"))) {
+      throw new Error("Merging video and audio needs ffmpeg, download it from the YouTube tab first")
     }
 
     const container = resolveMergeContainer(videoFormat, audioFormat)
@@ -862,6 +1191,7 @@ export default class YtDlp {
 
     const cookieFilePath = await this.resolveCookieFile(options)
     const authArgs = buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath)
+    const runtime = this.resolveJsRuntime(installed.version)
     const args = buildYtDlpDownloadArgs(
       {
         url: request.url,
@@ -869,14 +1199,14 @@ export default class YtDlp {
         videoFormatId: videoFormat.format_id,
         audioFormatId: audioFormat?.format_id
       },
-      { dir, container, authArgs }
+      { dir, container, ffmpegLocation, jsRuntimeArgs: runtime.args, authArgs }
     )
 
     this.downloads.set(id, status)
     this.progressTrackers.set(id, new YtDlpProgressTracker(totalLength))
     this.pruneDownloads()
     await this.saveDownloadRow(id, status, request.url)
-    this.spawnDownload(id, args, request, options, proxyConfig, dir)
+    this.spawnDownload(id, args, request, options, proxyConfig, dir, runtime.env)
 
     return status
   }
@@ -900,9 +1230,10 @@ export default class YtDlp {
     request: TYtDlpDownloadRequest,
     options: TOptionsConfig | null | undefined,
     proxyConfig: TProxyConfig | null | undefined,
-    dir: string
+    dir: string,
+    env: NodeJS.ProcessEnv
   ) => {
-    const child = spawn(this.getExecutablePath(), args)
+    const child = spawn(this.getExecutablePath(), args, { env })
     this.processes.set(id, child)
 
     let stdoutBuffer = ""
@@ -984,18 +1315,24 @@ export default class YtDlp {
     dir: string
   ) => {
     const cookieFilePath = await this.resolveCookieFile(options)
+    const installed = await this.isInstalled()
+    const runtime = this.resolveJsRuntime(installed.version)
 
     for (const selection of request.subtitles) {
       try {
-        await this.runYtDlp([
-          "--no-playlist",
-          "--no-warnings",
-          ...buildSubtitleArgs(selection),
-          "-o",
-          path.join(dir, "%(title)s.%(ext)s"),
-          ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
-          request.url
-        ])
+        await this.runYtDlp(
+          [
+            "--no-playlist",
+            "--no-warnings",
+            ...runtime.args,
+            ...buildSubtitleArgs(selection),
+            "-o",
+            path.join(dir, "%(title)s.%(ext)s"),
+            ...buildYtDlpAuthArgs(options, proxyConfig, cookieFilePath),
+            request.url
+          ],
+          runtime.env
+        )
       } catch (error) {
         // a missing subtitle must never fail the finished media download
         console.error(`[yt-dlp] Could not download the ${selection.language} subtitles:`, error)
@@ -1078,30 +1415,71 @@ export default class YtDlp {
     }
   }
 
-  private finalizeInstall = async (gid: string): Promise<"installed" | "failed"> => {
-    // aria2 leaves the file without the execute bit, so it is set before the
-    // version is read, otherwise the read fails with EACCES
-    await this.ensureExecutablePermission()
+  // the aria2 event and a status poll can both land here, only one of them may
+  // move the temp file, the second one reads what the first one left behind
+  private installFinalizing: Promise<"installed" | "failed"> | undefined = undefined
 
-    // the file has to be in the folder the youtube downloads read it from, a
-    // download that landed anywhere else is reported instead of stored
+  private finalizeInstall = (gid: string): Promise<"installed" | "failed"> => {
+    if (this.installFinalizing) return this.installFinalizing
+
+    this.installFinalizing = this.applyInstall(gid).finally(() => {
+      this.installFinalizing = undefined
+    })
+
+    return this.installFinalizing
+  }
+
+  private applyInstall = async (gid: string): Promise<"installed" | "failed"> => {
+    // the download landed in a temp file, the executable path is only touched
+    // once that file really holds a binary that starts
     const executablePath = this.getExecutablePath()
-    const present = await access(executablePath).then(
+    const tempPath = `${executablePath}.download`
+
+    const present = await access(tempPath).then(
       () => true,
       () => false
     )
 
     if (!present) {
-      this.installError = `The downloaded yt-dlp file is missing from ${executablePath}, please download it again`
+      // a download that finished before this build used the temp file layout
+      // still has its file under the executable name
+      const legacy = await access(executablePath).then(
+        () => true,
+        () => false
+      )
+
+      if (!legacy) {
+        this.installError = `The downloaded yt-dlp file is missing from ${path.dirname(executablePath)}, please download it again`
+        await this.clearAria2Result(gid)
+        return "failed"
+      }
+    }
+
+    // aria2 leaves the file without the execute bit, so it is set before the
+    // version is read, otherwise the read fails with EACCES
+    const sourcePath = present ? tempPath : executablePath
+    await this.ensureExecutablePermission(sourcePath)
+
+    const version = await this.readVersionEventually(sourcePath)
+
+    if (!version) {
+      this.installError = "The downloaded yt-dlp file could not be started, please download it again"
+      await rm(tempPath, { force: true })
       await this.clearAria2Result(gid)
       return "failed"
     }
 
-    const version = await this.readVersion()
-    if (!version) {
-      this.installError = "The downloaded yt-dlp file could not be started, please download it again"
-      await this.clearAria2Result(gid)
-      return "failed"
+    if (present) {
+      try {
+        // a previous install is replaced only after the new file was validated
+        await rm(executablePath, { force: true })
+        await rename(tempPath, executablePath)
+      } catch (error) {
+        this.installError = this.toReplaceError(error, executablePath)
+        await rm(tempPath, { force: true })
+        await this.clearAria2Result(gid)
+        return "failed"
+      }
     }
 
     // the cached release has to survive, electron-store replaces the whole object
@@ -1137,17 +1515,32 @@ export default class YtDlp {
     return filePath
   }
 
-  private ensureExecutablePermission = async () => {
+  // the file that was just downloaded is the temp one, the executable path is
+  // still the previous copy until it is replaced
+  private ensureExecutablePermission = async (filePath: string = this.getExecutablePath()) => {
     if (checkSystemPlatform() === "win") return
 
     try {
-      await chmod(this.getExecutablePath(), 0o755)
+      await chmod(filePath, 0o755)
     } catch (error) {
       console.error("[yt-dlp] Could not make the downloaded file executable:", error)
     }
   }
 
   private readVersion = (): Promise<string | undefined> => this.readVersionFrom(this.getExecutablePath())
+
+  // a freshly written yt-dlp executable is scanned by the antivirus too, so its
+  // version is read a few times before the download is called broken
+  private readVersionEventually = async (filePath: string): Promise<string | undefined> => {
+    for (const delay of [0, 1000, 2000, 4000, 8000]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+
+      const version = await this.readVersionFrom(filePath)
+      if (version) return version
+    }
+
+    return undefined
+  }
 
   private readVersionFrom = (filePath: string): Promise<string | undefined> =>
     new Promise((resolve) => {
@@ -1170,9 +1563,9 @@ export default class YtDlp {
     }
   }
 
-  private runYtDlp = (args: string[]): Promise<string> =>
+  private runYtDlp = (args: string[], env: NodeJS.ProcessEnv = process.env): Promise<string> =>
     new Promise((resolve, reject) => {
-      execFile(this.getExecutablePath(), args, { maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+      execFile(this.getExecutablePath(), args, { maxBuffer: 64 * 1024 * 1024, env }, (error, stdout, stderr) => {
         if (error) {
           console.error("[yt-dlp] command failed:", error.message, "\n", stderr)
           const detail = stderr || error.message

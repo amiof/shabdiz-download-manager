@@ -1,5 +1,11 @@
 import { TYtDlpStep } from "@components/addLinkPopup/types.ts"
-import { TYtDlpMediaInfo, TYtDlpStatus, TYtDlpSubtitle, TYtDlpSubtitleSelection } from "@src/types.ts"
+import {
+  TYtDlpFfmpegStatus,
+  TYtDlpMediaInfo,
+  TYtDlpStatus,
+  TYtDlpSubtitle,
+  TYtDlpSubtitleSelection
+} from "@src/types.ts"
 
 export type TYoutubeTabStore = TYoutubeTabAction & TYoutubeTab
 
@@ -7,6 +13,7 @@ export type TYoutubeTab = {
   step: TYtDlpStep
   url: string
   status: TYtDlpStatus | null
+  ffmpegStatus: TYtDlpFfmpegStatus | null
   fetching: boolean
   mediaInfo: TYtDlpMediaInfo | null
   videoFormatId: string | null
@@ -19,6 +26,8 @@ export type TYoutubeTab = {
 export type TYoutubeTabAction = {
   checkYtDlpStatus: () => Promise<void>
   installYtDlp: () => Promise<void>
+  checkFfmpegStatus: () => Promise<void>
+  installFfmpeg: () => Promise<void>
   setUrl: (url: string) => void
   fetchMediaInfo: () => Promise<void>
   selectVideoFormat: (formatId: string) => void

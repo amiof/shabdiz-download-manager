@@ -148,6 +148,18 @@ export type TYtDlpStatus = {
   ffmpegAvailable: boolean
 }
 
+// yt-dlp cannot merge a video and an audio stream without ffmpeg, and the
+// binary it ships does not include one, so the app keeps its own copy
+export type TYtDlpFfmpegState = "installed" | "not-installed" | "downloading" | "failed"
+
+export type TYtDlpFfmpegStatus = {
+  state: TYtDlpFfmpegState
+  path: string
+  percent: number
+  speed: string
+  error?: string
+}
+
 // update state of the executable that is already installed. "check-failed" means
 // the latest release could not be read, it never implies that an update exists
 export type TYtDlpUpdateState =

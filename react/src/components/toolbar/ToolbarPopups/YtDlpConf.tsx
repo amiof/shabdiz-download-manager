@@ -2,7 +2,7 @@ import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined"
 import RefreshIcon from "@mui/icons-material/Refresh"
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt"
 import { Alert, Button, CircularProgress, Paper, Typography } from "@mui/material"
-import { TYtDlpStatus, TYtDlpUpdateStatus } from "@src/types.ts"
+import { TYtDlpFfmpegStatus, TYtDlpStatus, TYtDlpUpdateStatus } from "@src/types.ts"
 import { formatBytes } from "@src/utils.ts"
 import { useCallback, useEffect, useState } from "react"
 import { ProgressBar } from "react-progressbar-fancy"
@@ -36,11 +36,20 @@ const YtDlpConf = ({ id }: Props) => {
   // only set while a missing yt-dlp is being installed, the update status does
   // not carry the progress of that first download
   const [installStatus, setInstallStatus] = useState<TYtDlpStatus | null>(null)
+  // yt-dlp needs a separate ffmpeg for a video/audio merge, the app installs
+  // its own copy and this tab is where that download is started
+  const [ffmpegStatus, setFfmpegStatus] = useState<TYtDlpFfmpegStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
 
   const refresh = useCallback(async () => {
-    setStatus(await window.electronAPI.getYtDlpUpdateStatus())
+    const [updateStatus, nextFfmpegStatus] = await Promise.all([
+      window.electronAPI.getYtDlpUpdateStatus(),
+      window.electronAPI.getFfmpegStatus()
+    ])
+
+    setStatus(updateStatus)
+    setFfmpegStatus(nextFfmpegStatus)
   }, [])
 
   useEffect(() => {
@@ -61,6 +70,15 @@ const YtDlpConf = ({ id }: Props) => {
     const timer = setTimeout(async () => setInstallStatus(await window.electronAPI.getYtDlpStatus()), POLL_DELAY)
     return () => clearTimeout(timer)
   }, [installStatus])
+
+  // the ffmpeg download runs through aria2 in the main process, exactly like
+  // the yt-dlp executable
+  useEffect(() => {
+    if (ffmpegStatus?.state !== "downloading") return
+
+    const timer = setTimeout(async () => setFfmpegStatus(await window.electronAPI.getFfmpegStatus()), POLL_DELAY)
+    return () => clearTimeout(timer)
+  }, [ffmpegStatus])
 
   // a finished install is announced once and then read again, so the tab shows
   // the version the download really left behind
@@ -113,8 +131,21 @@ const YtDlpConf = ({ id }: Props) => {
     }
   }
 
+  const installFfmpeg = async () => {
+    setBusy(true)
+    setNotice("")
+
+    try {
+      setFfmpegStatus(await window.electronAPI.downloadFfmpeg())
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const installing = installStatus?.state === "downloading"
-  const running = busy || installing || status?.state === "downloading" || status?.state === "installing"
+  const downloadingFfmpeg = ffmpegStatus?.state === "downloading"
+  const running =
+    busy || installing || downloadingFfmpeg || status?.state === "downloading" || status?.state === "installing"
   const error = installStatus?.state === "failed" ? installStatus.error : status?.error
   const currentState = installStatus?.state === "failed" ? undefined : status?.state
 
@@ -152,6 +183,48 @@ const YtDlpConf = ({ id }: Props) => {
             </Typography>
           </div>
         </Paper>
+
+        <Paper variant={"outlined"} className={"px-4 py-3"} sx={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+          <div className={"grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 items-center"}>
+            <Typography variant={"caption"} color={"text.secondary"}>
+              ffmpeg
+            </Typography>
+            <Typography variant={"body2"}>
+              {downloadingFfmpeg
+                ? "Downloading ffmpeg"
+                : ffmpegStatus?.state === "installed"
+                  ? "installed"
+                  : ffmpegStatus?.state === "failed"
+                    ? "install failed"
+                    : "not installed"}
+            </Typography>
+
+            <Typography variant={"caption"} color={"text.secondary"}>
+              Path
+            </Typography>
+            <Typography variant={"body2"} className={"break-all"}>
+              {ffmpegStatus?.path || "not available"}
+            </Typography>
+          </div>
+
+          <Typography variant={"caption"} color={"text.secondary"} className={"block pt-2"}>
+            {"yt-dlp does not include ffmpeg, video and audio can only be merged with the copy Shabdiz installs here."}
+          </Typography>
+        </Paper>
+
+        {downloadingFfmpeg && (
+          <div className={"w-full flex flex-col gap-2"}>
+            <ProgressBar progressColor={"green"} label={""} darkTheme score={ffmpegStatus?.percent ?? 0} />
+            <div className={"flex items-center justify-between text-sm text-neutral-400"}>
+              <span>{`${ffmpegStatus?.percent ?? 0}%`}</span>
+              <span>{`${formatBytes(ffmpegStatus?.speed, 1)}/s`}</span>
+            </div>
+          </div>
+        )}
+
+        {ffmpegStatus?.state === "failed" && ffmpegStatus.error && (
+          <Alert severity={"error"}>{ffmpegStatus.error}</Alert>
+        )}
 
         {(status?.state === "downloading" || status?.state === "installing") && (
           <div className={"w-full flex flex-col gap-2"}>
@@ -211,6 +284,19 @@ const YtDlpConf = ({ id }: Props) => {
               onClick={() => void update()}
             >
               Update
+            </Button>
+          )}
+
+          {(ffmpegStatus?.state === "not-installed" || ffmpegStatus?.state === "failed") && (
+            <Button
+              variant={"contained"}
+              color={"success"}
+              size={"small"}
+              startIcon={<DownloadOutlinedIcon />}
+              disabled={running}
+              onClick={() => void installFfmpeg()}
+            >
+              {ffmpegStatus?.state === "failed" ? "Retry ffmpeg" : "Install ffmpeg"}
             </Button>
           )}
         </div>

@@ -1,4 +1,5 @@
 import useYoutubeTabStore from "@components/addLinkPopup/store/youtubeTabStore.ts"
+import FfmpegNotice from "@components/addLinkPopup/tabs/AddYoutubeTab/FfmpegNotice.tsx"
 import {
   destinationFolderLabel,
   formatAudioPrimaryLabel,
@@ -15,7 +16,6 @@ const YoutubeSummaryStep = () => {
   const videoFormatId = useYoutubeTabStore((state) => state.videoFormatId)
   const audioFormatId = useYoutubeTabStore((state) => state.audioFormatId)
   const subtitleChoices = useYoutubeTabStore((state) => state.subtitleChoices)
-  const status = useYoutubeTabStore((state) => state.status)
   const error = useYoutubeTabStore((state) => state.error)
 
   const videoFormat = mediaInfo?.videoFormats.find((format) => format.format_id === videoFormatId)
@@ -64,10 +64,8 @@ const YoutubeSummaryStep = () => {
         </div>
       </Paper>
 
-      {needsAudio && !status?.ffmpegAvailable && (
-        <Alert severity={"warning"}>
-          {"Merging the selected video and audio needs ffmpeg and it was not found on this system."}
-        </Alert>
+      {needsAudio && (
+        <FfmpegNotice action={"The selected video format has no audio, so the two streams have to be merged"} />
       )}
 
       {error && <Alert severity={"error"}>{error}</Alert>}

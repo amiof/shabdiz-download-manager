@@ -1,19 +1,56 @@
 import useAddLinkStore from "@components/addLinkPopup/store/addLinkStore.ts"
 import { TYoutubeTabAction, TYoutubeTabStore } from "@components/addLinkPopup/store/youtubeTabStoreType.ts"
-import { TYtDlpDownloadRequest } from "@src/types.ts"
+import { TYtDlpDownloadRequest, TYtDlpFfmpegStatus } from "@src/types.ts"
 import { StoreApi } from "zustand"
 
 export type SetState = StoreApi<TYoutubeTabStore>["setState"]
 export type GetState = StoreApi<TYoutubeTabStore>["getState"]
 
 const INSTALL_POLL_DELAY = 600
+const FFMPEG_POLL_DELAY = 600
 
 let installTimer: ReturnType<typeof setTimeout> | null = null
+let ffmpegTimer: ReturnType<typeof setTimeout> | null = null
 
 const clearInstallPolling = () => {
   if (installTimer) {
     clearTimeout(installTimer)
     installTimer = null
+  }
+}
+
+const clearFfmpegPolling = () => {
+  if (ffmpegTimer) {
+    clearTimeout(ffmpegTimer)
+    ffmpegTimer = null
+  }
+}
+
+// a finished ffmpeg download changes what the steps offer, so the yt-dlp status
+// that carries ffmpegAvailable is read again instead of going stale
+const applyFfmpegStatus = async (set: SetState, get: GetState, ffmpegStatus: TYtDlpFfmpegStatus) => {
+  if (ffmpegStatus.state !== "installed") {
+    set({ ffmpegStatus })
+    return
+  }
+
+  const status = await window.electronAPI.getYtDlpStatus().catch(() => null)
+  set({ ffmpegStatus, status: status ?? get().status })
+}
+
+// the app managed ffmpeg is downloaded through aria2 too, the popup only
+// follows the progress of that download
+const pollFfmpegStatus = async (set: SetState, get: GetState) => {
+  try {
+    const ffmpegStatus = await window.electronAPI.getFfmpegStatus()
+    await applyFfmpegStatus(set, get, ffmpegStatus)
+
+    if (ffmpegStatus.state === "installed" || ffmpegStatus.state === "failed") return
+
+    ffmpegTimer = setTimeout(() => void pollFfmpegStatus(set, get), FFMPEG_POLL_DELAY)
+  } catch (error) {
+    console.error(error)
+    set({ ffmpegStatus: null })
   }
 }
 
@@ -92,6 +129,40 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
     } catch (error) {
       console.error(error)
       set({ step: "install", error: "The yt-dlp download could not be started." })
+    }
+  },
+
+  checkFfmpegStatus: async () => {
+    clearFfmpegPolling()
+
+    try {
+      const ffmpegStatus = await window.electronAPI.getFfmpegStatus()
+      await applyFfmpegStatus(set, get, ffmpegStatus)
+
+      if (ffmpegStatus.state === "downloading") {
+        ffmpegTimer = setTimeout(() => void pollFfmpegStatus(set, get), FFMPEG_POLL_DELAY)
+      }
+    } catch (error) {
+      console.error(error)
+      set({ ffmpegStatus: null })
+    }
+  },
+
+  installFfmpeg: async () => {
+    if (get().ffmpegStatus?.state === "downloading") return
+
+    clearFfmpegPolling()
+
+    try {
+      const ffmpegStatus = await window.electronAPI.downloadFfmpeg()
+      await applyFfmpegStatus(set, get, ffmpegStatus)
+
+      if (ffmpegStatus.state === "downloading") {
+        ffmpegTimer = setTimeout(() => void pollFfmpegStatus(set, get), FFMPEG_POLL_DELAY)
+      }
+    } catch (error) {
+      console.error(error)
+      set({ ffmpegStatus: null })
     }
   },
 
@@ -273,6 +344,7 @@ export const youtubeTabAction = (set: SetState, get: GetState): TYoutubeTabActio
 
   resetFlow: () => {
     clearInstallPolling()
+    clearFfmpegPolling()
 
     set({
       url: "",

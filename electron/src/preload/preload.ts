@@ -14,6 +14,7 @@ import {
   TYtDlpDownloadRequest,
   TYtDlpDownloadResponse,
   TYtDlpDownloadStatus,
+  TYtDlpFfmpegStatus,
   TYtDlpMediaInfoResponse,
   TYtDlpStatus,
   TYtDlpUpdateStatus
@@ -85,6 +86,8 @@ interface ElectronAPI {
   // yt-dlp
   getYtDlpStatus: () => Promise<TYtDlpStatus>
   downloadYtDlp: () => Promise<TYtDlpStatus>
+  getFfmpegStatus: () => Promise<TYtDlpFfmpegStatus>
+  downloadFfmpeg: () => Promise<TYtDlpFfmpegStatus>
   getYtDlpMediaInfo: (
     url: string,
     options?: TOptionsConfig | null,
@@ -226,6 +229,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   //yt-dlp
   getYtDlpStatus: () => ipcRenderer.invoke("get-yt-dlp-status"),
   downloadYtDlp: () => ipcRenderer.invoke("download-yt-dlp"),
+  getFfmpegStatus: () => ipcRenderer.invoke("get-ffmpeg-status"),
+  downloadFfmpeg: () => ipcRenderer.invoke("download-ffmpeg"),
   getYtDlpMediaInfo: (url: string, options?: TOptionsConfig | null, proxyConfig?: TProxyConfig | null) =>
     ipcRenderer.invoke("get-yt-dlp-media-info", url, options, proxyConfig),
   startYtDlpDownload: (

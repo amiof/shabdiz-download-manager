@@ -12,6 +12,7 @@ import {
   TYtDlpDownloadRequest,
   TYtDlpDownloadResponse,
   TYtDlpDownloadStatus,
+  TYtDlpFfmpegStatus,
   TYtDlpMediaInfoResponse,
   TYtDlpStatus,
   TYtDlpUpdateStatus
@@ -90,6 +91,8 @@ export interface IElectronAPI {
   // yt-dlp
   getYtDlpStatus: () => Promise<TYtDlpStatus>
   downloadYtDlp: () => Promise<TYtDlpStatus>
+  getFfmpegStatus: () => Promise<TYtDlpFfmpegStatus>
+  downloadFfmpeg: () => Promise<TYtDlpFfmpegStatus>
   getYtDlpMediaInfo: (
     url: string,
     options?: TAddLinkOptions | null,

@@ -4,6 +4,7 @@ import { TOptionsConfig, TProxyConfig } from "../../types"
 import {
   TYtDlpDownloadRequest,
   TYtDlpDownloadResponse,
+  TYtDlpFfmpegStatus,
   TYtDlpMediaInfoResponse,
   TYtDlpStatus,
   TYtDlpUpdateStatus
@@ -22,6 +23,14 @@ const emptyStatus = (error: string): TYtDlpStatus => ({
   speed: "0",
   error,
   ffmpegAvailable: false
+})
+
+const emptyFfmpegStatus = (error: string): TYtDlpFfmpegStatus => ({
+  state: "failed",
+  path: "",
+  percent: 0,
+  speed: "0",
+  error
 })
 
 const emptyUpdateStatus = (error: string): TYtDlpUpdateStatus => ({
@@ -44,6 +53,24 @@ export const ipcYtDlpHandler = () => {
     } catch (error) {
       console.error("[yt-dlp] Failed to read the installation status:", error)
       return emptyStatus("Could not check the yt-dlp installation")
+    }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.GET_FFMPEG_STATUS, async (): Promise<TYtDlpFfmpegStatus> => {
+    try {
+      return await ytDlp.getFfmpegStatus()
+    } catch (error) {
+      console.error("[yt-dlp] Failed to read the ffmpeg status:", error)
+      return emptyFfmpegStatus("Could not check the ffmpeg installation")
+    }
+  })
+
+  ipcMain.handle(YT_DLP_CHANNELS.DOWNLOAD_FFMPEG, async (): Promise<TYtDlpFfmpegStatus> => {
+    try {
+      return await ytDlp.downloadFfmpeg()
+    } catch (error) {
+      console.error("[yt-dlp] Failed to start the ffmpeg download:", error)
+      return emptyFfmpegStatus(toErrorMessage(error))
     }
   })
 

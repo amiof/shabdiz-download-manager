@@ -78,6 +78,8 @@ export const UTILS_CHANNELS = {
 }
 export const YT_DLP_CHANNELS = {
   GET_STATUS: "get-yt-dlp-status",
+  GET_FFMPEG_STATUS: "get-ffmpeg-status",
+  DOWNLOAD_FFMPEG: "download-ffmpeg",
   GET_UPDATE_STATUS: "get-yt-dlp-update-status",
   CHECK_UPDATE: "check-yt-dlp-update",
   START_UPDATE: "start-yt-dlp-update",

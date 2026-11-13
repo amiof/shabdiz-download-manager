@@ -205,5 +205,11 @@ export const toYtDlpUserError = (detail: string): string => {
 
   if (!firstLine) return "yt-dlp could not process this link"
 
+  // YouTube leaves no playable format behind when the "n" challenge could not be
+  // solved, and the raw message only talks about "--list-formats"
+  if (/requested format is not available|only images are available/i.test(detail)) {
+    return "YouTube offered no downloadable format for this link. Update yt-dlp from the YouTube tab and try again"
+  }
+
   return firstLine.replace(/^ERROR:\s*/i, "").slice(0, 300)
 }
